@@ -1,0 +1,65 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\boom_sonic-33a566\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\boom_sonic-33a566\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\boom_sonic-33a566\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "root hips_06",
+        "spine 1_034",
+        "pelvis_07",
+        "spine 2_035",
+        "leg right thigh_020",
+        "leg left thigh_09",
+        "spine 3_036",
+        "leg right knee_024",
+        "leg left knee_013",
+        "spine 4_037",
+        "leg right ankle_028",
+        "leg left ankle_017",
+        "unusedc_torso_joint_038",
+        "spine spikes 1_0200",
+        "leg right toes_029",
+        "leg left toes_018",
+        "arm left shoulder 1_064",
+        "arm right shoulder 1_039",
+        "head neck lower_089",
+        "spine spikes 2_0201",
+        "arm left shoulder 2_065",
+        "arm right shoulder 2_040",
+        "head neck upper_090",
+        "spine spikes 3_0202",
+        "arm left elbow_069",
+        "arm right elbow_044",
+        "spine spikes 4_0203",
+        "arm left wrist_073",
+        "arm right wrist_048"
+      ],
+      "frame_digest": "3742c48befec1cfede5307d23c9958ad0d3719a5"
+    }
+  },
+  "samples": {
+    "m-an_object_walks_forward_with_a_confident_heavy-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_walks_forward_with_a_confident_heavy",
+      "prompt": "An object walks forward with a confident, heavy masculine stride, shoulders square, arms swinging naturally.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "3742c48befec1cfede5307d23c9958ad0d3719a5"
+    }
+  }
+}

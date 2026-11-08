@@ -1,0 +1,63 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\garchomp-1e8889\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\garchomp-1e8889\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\garchomp-1e8889\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "Waist_02",
+        "Hips_03",
+        "Spine_038",
+        "LThigh_05",
+        "RThigh_017",
+        "LShoulder_041",
+        "RShoulder_053",
+        "Neck_048",
+        "LLeg_06",
+        "RLeg_018",
+        "LArm_042",
+        "RArm_054",
+        "Head_049",
+        "LFoot_07",
+        "RFoot_019",
+        "LForeArm_043",
+        "RForeArm_055",
+        "LToe_09",
+        "RToe_021",
+        "LHand_046",
+        "RHand_058",
+        "LToeA_011",
+        "LToeC_015",
+        "LToeB_013",
+        "RToeA_023",
+        "RToeC_027",
+        "RToeB_025"
+      ],
+      "frame_digest": "6931cf6862ae9f501a643790bbf4d2d2ee44fe93"
+    }
+  },
+  "samples": {
+    "m-an_object_floats_in_place_in_the_air_drifting-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_floats_in_place_in_the_air_drifting",
+      "prompt": "An object floats in place in the air, drifting slowly up and down.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "6931cf6862ae9f501a643790bbf4d2d2ee44fe93"
+    }
+  }
+}

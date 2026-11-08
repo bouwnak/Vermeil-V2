@@ -1,0 +1,45 @@
+{
+  "name": "m",
+  "profile": "general",
+  "inputs": [
+    "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\slim\\m.glb"
+  ],
+  "annotate": "rule",
+  "profile_auto": true,
+  "annotate_names": "rule",
+  "annotate_face": "rule",
+  "animated": false,
+  "n_joints_export": 28,
+  "rig_glb": null,
+  "stats_dataset": "general",
+  "dropped_translation": {
+    "max_share_of_extent": 0.0,
+    "clip": null,
+    "joint": null
+  },
+  "face_pair": {
+    "r_hip": {
+      "raw": "RThigh_032",
+      "clean": "Right Thigh"
+    },
+    "l_hip": {
+      "raw": "LThigh_028",
+      "clean": "Left Thigh"
+    },
+    "source": "thigh"
+  },
+  "annotation_notes": [
+    "sources: joint names rule, face pair rule"
+  ],
+  "n_joints": 28,
+  "model_joint_limit": {
+    "max_joints": 71,
+    "source": "released UniML3D models",
+    "fits": true
+  },
+  "n_clips": 0,
+  "cond": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset\\cond.npy",
+  "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset\\m.glb",
+  "notes": [],
+  "preview": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset\\preview.png"
+}

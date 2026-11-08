@@ -1,0 +1,30 @@
+:root, body, body.theme-dark {
+  --background: #111318;
+  --text-color: #eef0f4;
+  --text-color-muted: #a5acb8;
+  --link-color: #7fb2ff;
+  --section-background-color: #171a20;
+  --area-background-color: #1f232a;
+  --block-background-color: #1f232a;
+  --header-background-color: #171a20;
+  --button-background-color: #2a2f38;
+  --button-background-color-hover: #3e8eff;
+  --button-background-color-active: #2e333b;
+  --button-text-color-active: #cfe2ff;
+  --button-toggle-background-color: #2e333b;
+  --button-toggle-background-color-hover: #3a404a;
+  --input-background-color: #15181d;
+  --input-background-color-hover: #1f232a;
+  --input-border-color: #2e333b;
+  --input-border-color-active: #3e8eff;
+  --input-group-border-color: #171a20;
+  --menu-background-color: #0d0f13;
+  --background-color-active: #3e8eff;
+  --background-color-hover: #2e333b;
+  --text-color-active: #ffffff;
+  --border-color: #2e333b;
+  --scrollbar-track-color: #171a20;
+  --scrollbar-thumb-color: #3a404a;
+}
+.logo { display: none !important; }
+.mobile_menu { display: none; }

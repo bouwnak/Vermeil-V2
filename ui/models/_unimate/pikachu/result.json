@@ -1,0 +1,10 @@
+[
+ {
+  "clip": "idle",
+  "path": "ui\\models\\_unimate\\pikachu\\idle.glb"
+ },
+ {
+  "clip": "walk",
+  "path": "ui\\models\\_unimate\\pikachu\\walk.glb"
+ }
+]

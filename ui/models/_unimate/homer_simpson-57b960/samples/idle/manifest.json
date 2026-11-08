@@ -1,0 +1,57 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\homer_simpson-57b960\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\homer_simpson-57b960\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\homer_simpson-57b960\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "Character_Root_04",
+        "Pelvis_05",
+        "Spine_1_015",
+        "Hip_R_010",
+        "Hip_L_06",
+        "Ass_Joint_014",
+        "Spine_2_016",
+        "Knee_R_011",
+        "Knee_L_07",
+        "Shoulder_L_020",
+        "Shoulder_R_00",
+        "Neck_017",
+        "Ankle_R_012",
+        "Ankle_L_08",
+        "Elbow_L_021",
+        "Elbow_R_027",
+        "Head_018",
+        "Ball_R_013",
+        "Ball_L_09",
+        "Wrist_L_022",
+        "Wrist_R_028"
+      ],
+      "frame_digest": "89f92ec6c6fb13aec7542ecbf02aad197ce71df3"
+    }
+  },
+  "samples": {
+    "m-an_object_stands_still_in_place_with_both_feet-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_stands_still_in_place_with_both_feet",
+      "prompt": "An object stands still in place with both feet planted and its arms relaxed down at its sides, breathing slowly.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "89f92ec6c6fb13aec7542ecbf02aad197ce71df3"
+    }
+  }
+}

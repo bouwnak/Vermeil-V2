@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vermeil</title>
+  <link rel="icon" type="image/x-icon" href="vermeil.ico">
+  <link rel="shortcut icon" href="vermeil.ico">
+  <link rel="stylesheet" href="vendor/fonts/nunito.css">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="social.css">
+  <script defer src="vendor/katex/katex.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/examples/jsm/",
+      "@pixiv/three-vrm": "./vendor/three-vrm/three-vrm.module.min.js"
+    }
+  }
+  </script>
+  <script>
+    // app.js holds the loading screen's own fallback, so it can't help when app.js itself never starts. This one can:
+    // it notes why, tries the page once more, then says so with a Try again button instead of sitting on "Starting up…" for ever.
+    (function () {
+      var why = "", KEY = "vermeil.bootRetry";
+      function note(text) { if (!why) why = String(text).slice(0, 300); }
+      addEventListener("error", function (e) { var t = e.target; note(t && t !== window && (t.src || t.href) ? "couldn't load " + (t.src || t.href) : e.message); }, true);
+      addEventListener("unhandledrejection", function (e) { note(e.reason && e.reason.message || e.reason); });
+      setTimeout(function () {
+        var step = document.getElementById("bootStep");
+        var tried = false;
+        try { tried = sessionStorage.getItem(KEY) === "1"; } catch (e) { /* private window */ }
+        if (!step || step.textContent.indexOf("Starting") !== 0) { try { sessionStorage.removeItem(KEY); } catch (e) { /* fine */ } return; }
+        try { window.pywebview.api.log_ui_error("boot", "stuck on the loading screen: " + (why || "no error was reported")); } catch (e) { /* not ready */ }
+        if (!tried) { try { sessionStorage.setItem(KEY, "1"); location.reload(); return; } catch (e) { /* show the message instead */ } }
+        step.textContent = "Vermeil couldn't start. " + (why || "The page didn't finish loading.");
+        var again = document.createElement("button");
+        again.type = "button"; again.textContent = "Try again"; again.style.marginTop = "12px";
+        again.onclick = function () { location.reload(); };
+        step.parentNode.appendChild(again);
+      }, 25000);
+    })();
+  </script>
+</head>
+<body>
+  <div class="boot" id="boot" role="status" aria-live="polite">
+    <div class="boot-card">
+      <img class="boot-logo" src="vermeil.ico" alt="">
+      <div class="boot-name">Vermeil</div>
+      <div class="boot-bar"><i></i></div>
+      <div class="boot-step" id="bootStep">Starting up…</div>
+      <div class="boot-tip" id="bootTip"></div>
+    </div>
+  </div>
+  <aside class="sidebar" aria-label="Menu">
+    <div class="side-bg" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+    <div class="who">
+      <span class="who-name" id="charName">Vermeil</span>
+      <span class="who-status" id="charStatus">Starting up…</span>
+    </div>
+
+    <nav class="menu">
+      <button class="item" data-panel="chat" aria-controls="panel-chat">
+        <span class="item-title">Chat</span>
+        <span class="item-sub" id="chatSub">Your conversation</span>
+      </button>
+      <button class="item" data-panel="planner" aria-controls="panel-planner">
+        <span class="item-title">Planner</span>
+        <span class="item-sub" id="plannerSub">Calendar, reminders, lists</span>
+      </button>
+      <button class="item" data-panel="study" aria-controls="panel-study">
+        <span class="item-title">Study</span>
+        <span class="item-sub">Files, reviews, research</span>
+      </button>
+      <button class="item" data-panel="gym" aria-controls="panel-gym">
+        <span class="item-title">Gym</span>
+        <span class="item-sub" id="gymSub">Workout &amp; timer</span>
+      </button>
+      <button class="item" id="adventureBtn" type="button" title="Games: the Dungeon Adventure and retro games">
+        <span class="item-title">Games</span>
+        <span class="item-sub">Adventure, retro games</span>
+      </button>
+      <button class="item" data-panel="electronics" aria-controls="panel-electronics">
+        <span class="item-title">Electronics</span>
+        <span class="item-sub">Repair, robots, circuit lab</span>
+      </button>
+      <button class="item" data-panel="generator" aria-controls="panel-generator">
+        <span class="item-title">Media</span>
+        <span class="item-sub">Generate, photo and video editing</span>
+      </button>
+      <button class="item" data-panel="kitchen" aria-controls="panel-kitchen">
+        <span class="item-title">Cooking &amp; Baking</span>
+        <span class="item-sub" id="kitchenSub">Recipes &amp; kitchen timer</span>
+      </button>
+      <button class="item" data-panel="music" aria-controls="panel-music">
+        <span class="item-title">Music</span>
+        <span class="item-sub" id="musicSub">Your playlists</span>
+      </button>
+      <button class="item moved" data-panel="spotify" aria-controls="panel-spotify" tabindex="-1" aria-hidden="true">
+        <span class="item-title">Spotify</span>
+        <span class="item-sub" id="spotifySub">Your music</span>
+      </button>
+      <button class="item" data-panel="missions" aria-controls="panel-missions">
+        <span class="item-title">Missions</span>
+        <span class="item-sub" id="missionsSub">Bigger goals, done step by step</span>
+      </button>
+      <button class="item" data-panel="pass" aria-controls="panel-pass">
+        <span class="item-title">Battle Pass</span>
+        <span class="item-sub" id="passSub">XP, quests, habits, rewards</span>
+      </button>
+      <button class="item" data-panel="focus" aria-controls="panel-focus">
+        <span class="item-title">Focus &amp; Progress</span>
+        <span class="item-sub" id="focusSub">Focus sessions, your trends</span>
+      </button>
+      <button class="item" data-panel="browser" aria-controls="panel-browser">
+        <span class="item-title">Browser</span>
+        <span class="item-sub">Search, tabs, your sites</span>
+      </button>
+      <button class="item" data-panel="mind" aria-controls="panel-mind">
+        <span class="item-title">Journal &amp; Think</span>
+        <span class="item-sub" id="mindSub">Decisions, ideas, goals</span>
+      </button>
+      <button class="item" data-panel="code" aria-controls="panel-code">
+        <span class="item-title">Code</span>
+        <span class="item-sub">Coding helper</span>
+      </button>
+      <button class="item toggle" id="voiceBtn" aria-pressed="false">
+        <span class="item-title">Voice</span>
+        <span class="item-sub" id="voiceSub">Off</span>
+      </button>
+      <button class="item toggle" id="cameraBtn" aria-pressed="false">
+        <span class="item-title">Camera</span>
+        <span class="item-sub" id="cameraSub">Off</span>
+      </button>
+      <button class="item" data-panel="characters" aria-controls="panel-characters">
+        <span class="item-title">Characters</span>
+        <span class="item-sub">Personality, voice and model</span>
+      </button>
+      <button class="item" data-panel="socialize" aria-controls="panel-socialize">
+        <span class="item-title">Socialize</span>
+        <span class="item-sub">Rooms, hubs and events</span>
+      </button>
+      <button class="item" data-panel="settings" aria-controls="panel-settings">
+        <span class="item-title">Settings</span>
+        <span class="item-sub">Face, behaviour</span>
+      <span class="upd-dot menu-dot" id="updDotMenu" hidden title="An update is ready to install"></span></button>
+    </nav>
+
+    <p class="hint" id="hint">Say “vermi” or type below. Click things in the room, or click the floor to walk.</p>
+  </aside>
+
+  <main class="room">
+    <canvas id="scene" aria-label="Your character's room"></canvas>
+    <div class="bubble" id="bubble" hidden><p id="bubbleText"></p></div>
+    <div class="sees" id="sees" hidden></div>
+    <div class="activity-tag" id="activityTag" hidden></div>
+    <div class="loading" id="loading" hidden>Loading model…</div>
+    <div class="top-left" id="topLeft">
+      <button class="editBtn" id="editBtn" aria-pressed="false">Edit room</button>
+      <div class="hub-pill" id="hubPill" hidden><b id="hubPillName"></b><small class="hub-keys" title="Hold W, A, S or D to walk where the camera looks. Clicking the floor still works too.">WASD to walk</small><button type="button" id="hubEdit" title="Change this place with the world editor" hidden>✏️ Edit world</button><button type="button" id="hubLeave">🏠 Go home</button></div>
+      <button type="button" class="round-btn" id="notifBtn" title="Notifications" aria-label="Notifications">🔔<span class="round-badge" id="notifBadge" hidden></span></button>
+      <button type="button" class="round-btn" id="friendsBtn" title="Friends" aria-label="Friends">👥</button>
+      <div class="notif-pop" id="notifPop" hidden></div>
+      <div class="notif-pop friends-pop" id="friendsPop" hidden></div>
+    </div>
+    <button type="button" class="round-btn msg-btn" id="msgBtn" title="Messages from your in-game friends" aria-label="Messages">💬<span class="round-badge" id="msgBadge" hidden></span></button>
+    <div class="msg-pop" id="msgPop" hidden></div>
+    <div class="msg-pop hub-chat" id="hubChat" hidden></div>
+    <div class="edit-bar" id="editBar" hidden>
+      <div class="edit-top">
+        <button type="button" class="edit-done" id="editDone">✓ Done editing</button>
+        <button type="button" class="edit-undo" id="editUndo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶ Undo</button>
+        <button type="button" class="edit-undo" id="editGym" title="Switch between your room and the gym room">🏋 Gym room</button>
+        <div class="edit-cats" id="catalogTabs" role="tablist" aria-label="What to change"></div>
+      </div>
+      <div class="edit-drawer" id="editDrawer">
+        <div class="catalog" id="catalog"></div>
+        <div class="edit-pane" data-pane="style" hidden><div class="themes" id="themes"></div></div>
+        <div class="edit-pane layout-pane" data-pane="layout" hidden>
+          <div class="layout-row"><p class="edit-sub">Wall colour</p>
+            <div class="swatches" id="wallSwatches"></div>
+            <label class="inline">Any colour <input type="color" id="wallColor" value="#2c2034"></label>
+          </div>
+          <div class="layout-row"><p class="edit-sub">Floor</p><select id="floorSelect" aria-label="Floor"></select></div>
+          <div class="layout-row"><p class="edit-sub">Wall type (the wall colour tints it; unique walls like Acoustic foam keep their own colours)</p>
+            <div class="layout-walls" id="wallpaperList"></div>
+          </div>
+        </div>
+        <div class="edit-pane" data-pane="time" hidden>
+          <label class="check"><input type="checkbox" id="autoTime"> Follow my real time of day</label>
+          <select id="skySelect" aria-label="Time of day"></select>
+          <label class="inline">Brightness <output id="brightOut">100%</output>
+            <input type="range" id="brightness" min="30" max="150" step="5" value="100">
+          </label>
+          <p class="note" id="clockNote"></p>
+        </div>
+        <div class="edit-pane house-pane" data-pane="house" hidden id="housePane"></div>
+        <div class="edit-pane" data-pane="designs" hidden id="designsPane"></div>
+        <div class="edit-pane" data-pane="sounds" hidden id="soundsPane"></div>
+        <div class="edit-pane" data-pane="reset" hidden>
+          <p class="note">Puts every piece of furniture back where it started (you can undo it).</p>
+          <button class="danger" id="resetRoom">Reset the room</button>
+        </div>
+      </div>
+    </div>
+    <div class="item-tools" id="itemTools" hidden>
+      <div class="paint-pop" id="paintPop" hidden></div>
+      <button type="button" class="tool" id="toolRotate" title="Turn (R)" aria-label="Turn"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="tool" id="toolPaint" title="Change colour" aria-label="Change colour"><svg viewBox="0 0 24 24"><path d="M14 3l7 7-6 6-7-7zM8 9l-3.5 3.5a2.5 2.5 0 0 0 0 3.5L6 17.5c-.8 1.6-2 2.5-3 3 2.6.6 5.4-.3 6.5-2.5l1-1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="tool danger" id="toolDelete" title="Remove (Delete)" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="hud" id="hud" aria-live="polite" aria-label="What's running"></div>
+    <button class="collapseBtn" id="collapseBtn" aria-pressed="false" aria-label="Hide the menu and chat" title="Hide the menu and chat (H)">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="talk-guide" id="talkGuide" hidden aria-label="Things you can say"></div>
+    <form class="talk" id="talkForm" autocomplete="off">
+      <input id="talkInput" type="text" placeholder="Talk to Vermeil…" aria-label="Message">
+      <button type="button" id="screenHelp" class="ghost" title="Your companion looks at the window behind Vermeil and explains it (errors: how to fix them). Type a question first to ask something specific." aria-label="What's on my screen?">🖥</button>
+      <button type="submit">Send</button>
+    </form>
+
+    <!-- Drawers -->
+    <section class="panel wide" id="panel-socialize" hidden aria-label="Socialize">
+      <header><h2>Socialize</h2><button class="close" aria-label="Close">×</button></header>
+      <nav class="tabs nav-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="events">Events</button>
+        <button type="button" role="tab" data-tab="rooms">Rooms</button>
+        <button type="button" role="tab" data-tab="me">Me</button>
+        <button type="button" role="tab" data-tab="official">Official</button>
+        <button type="button" role="tab" data-tab="search">Search</button>
+      </nav>
+      <div id="navBody"></div>
+    </section>
+    <section class="panel" id="panel-chat" hidden aria-label="Chat history">
+      <header><h2>Chat</h2><button class="close" aria-label="Close">×</button></header>
+      <nav class="tabs" id="chatTabs" role="tablist"></nav>
+      <div id="chatSearchRow"><input id="chatSearch" type="search" placeholder="Search everything you've said or saved… (Enter)" aria-label="Search memory"></div>
+      <ol class="log" id="log"></ol>
+      <div id="chatOther" hidden></div>
+    </section>
+
+    <section class="panel wide" id="panel-study" hidden aria-label="Study">
+      <header><h2>Study</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="studyBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-code" hidden aria-label="Coding helper">
+      <header><h2>Coding helper</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="codeBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-browser" hidden aria-label="Browser">
+      <header><h2>Browser</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="browserBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-planner" hidden aria-label="Planner">
+      <header><h2>Planner</h2><button class="close" aria-label="Close">×</button></header>
+      <p class="note">Click a day to see everything on it. You can also just say: “remind me every Monday at 8 to submit my log”.</p>
+      <div id="plannerBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-music" hidden aria-label="Music">
+      <header><h2>Music</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="musicBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-electronics" hidden aria-label="Robotics and electronics">
+      <header><h2>Robotics &amp; Electronics</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="elecBody"></div>
+    </section>
+
+    <section class="panel wide media-panel" id="panel-generator" hidden aria-label="Media">
+      <header><h2>Media</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="genBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-kitchen" hidden aria-label="Cooking and Baking">
+      <header><h2>Cooking &amp; Baking</h2><button class="close" aria-label="Close">×</button></header>
+      <div class="tabs" role="tablist" id="kitchenTabs">
+        <button type="button" role="tab" data-kind="cooking" aria-selected="true">🍳 Cooking</button>
+        <button type="button" role="tab" data-kind="baking" aria-selected="false">🧁 Baking</button>
+      </div>
+      <div id="cookingBody"></div>
+      <div id="bakingBody" hidden></div>
+    </section>
+
+    <section class="panel wide" id="panel-gym" hidden aria-label="Gym">
+      <header><h2>Gym</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="gymBody"></div>
+    </section>
+
+    <section class="panel spotify-panel" id="panel-spotify" hidden aria-label="Spotify">
+      <header><h2>Spotify</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="spotifyBody"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="panel wide" id="panel-missions" hidden aria-label="Missions">
+      <header><h2>Missions</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="missionsBody"></div>
+    </section>
+
+    <section class="panel" id="panel-pass" hidden aria-label="Battle Pass, quests and habits">
+      <header><h2>Battle Pass</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="passBody"></div>
+    </section>
+
+    <section class="panel" id="panel-focus" hidden aria-label="Focus and progress">
+      <header><h2>Focus &amp; Progress</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="focusBody"></div>
+    </section>
+
+    <section class="panel wide" id="panel-mind" hidden aria-label="Journal and Think">
+      <header><h2>Journal &amp; Think</h2><button class="close" aria-label="Close">×</button></header>
+      <div id="mindBody"></div>
+    </section>
+
+    <section class="panel" id="panel-characters" hidden aria-label="Characters">
+      <header><h2>Characters</h2><button class="close" aria-label="Close">×</button></header>
+      <ul class="chars" id="charList"></ul>
+      <div class="row">
+        <button class="ghost" id="newChar">Add a character</button>
+        <button class="ghost" id="importChar" title="Open a .vermeil file a friend sent you">📥 Import a character</button>
+        <button class="ghost" id="workshopBtn" title="Find 3D models and voice clones, and manage the ones you have">🛠 Workshop</button>
+      </div>
+
+      <form class="editor" id="editor" hidden>
+        <label>Name <input name="name" required maxlength="40"></label>
+        <label>Personality
+          <textarea name="prompt" rows="9" placeholder="Describe how they talk and behave…"></textarea>
+        </label>
+        <div class="persona-gen">
+          <input id="personaFrom" maxlength="80" placeholder="Copy a character… e.g. Rick Sanchez, Jake the Dog" aria-label="Character to copy">
+          <button type="button" class="ghost" id="personaGo" title="Write a personality like this character">✓</button>
+        </div>
+        <p class="note">Type any character and press ✓. The Personality box above gets their way of talking.</p>
+        <label>Speaks
+          <select name="language" id="charLanguage">
+            <option value="auto">Same language as me (auto)</option>
+            <option value="en">English</option><option value="ja">Japanese</option><option value="ko">Korean</option>
+            <option value="tl">Filipino (Tagalog)</option><option value="zh">Chinese (Mandarin)</option><option value="es">Spanish</option>
+            <option value="fr">French</option><option value="de">German</option><option value="it">Italian</option>
+            <option value="pt">Portuguese</option><option value="ru">Russian</option><option value="th">Thai</option>
+            <option value="vi">Vietnamese</option><option value="id">Indonesian</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="translate"> Add an English translation after each reply (not read aloud)</label>
+        <label>Voice language
+          <select id="langSelect"></select>
+        </label>
+        <label>Voice
+          <select name="voice" id="voiceSelect"></select>
+        </label>
+        <p class="note" id="voiceNote">Voices marked “online” need the internet (pip install edge-tts). All others run on your PC.</p>
+        <label>Online voice (Kokoro — used while the AI is online)
+          <select name="voice_online" id="voiceOnlineSelect"></select>
+        </label>
+        <p class="note" id="kokoroNote">Kokoro runs inside the app (no Docker). Offline, the voice above is used.</p>
+        <div class="sliders">
+          <label>Speed <output id="rateOut">0%</output>
+            <input type="range" name="rate" min="-50" max="100" step="5" value="0">
+          </label>
+          <label>Pitch <output id="pitchOut">0 Hz</output>
+            <input type="range" name="pitch" min="-50" max="50" step="5" value="0">
+          </label>
+          <label>Volume <output id="volumeOut">100%</output>
+            <input type="range" name="volume" min="20" max="150" step="5" value="100">
+          </label>
+          <label>Emotion in voice <output id="emotionOut">100%</output>
+            <input type="range" name="emotion" min="0" max="150" step="10" value="100">
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" name="natural" checked> Natural speech: breaths, real pauses at "…", a melody that rises on questions</label>
+        <label class="check"><input type="checkbox" name="emotional"> Emotional voice (Chatterbox): really laughs, sighs and acts the line out. English only, slower</label>
+        <p class="note" id="chatterNote" hidden></p>
+        <p class="note">Emotion: the melody, speed and loudness change to match what's said: happy bounces, sad sinks, scared shakes, *giggles* are said out loud and *sighs* are heard. 0% = always flat.</p>
+        <button type="button" class="ghost" id="previewVoice">Hear this voice</button>
+        <button type="button" class="ghost" id="previewOnlineVoice">Hear online voice</button>
+        <fieldset class="rvc" id="rvcBox">
+          <legend>Voice clone (RVC)</legend>
+          <label>Clone voice
+            <select id="rvcSelect"></select>
+          </label>
+          <div class="row">
+            <button type="button" class="ghost" id="rvcImport">Import a voice (.pth + .index)…</button>
+            <button type="button" class="ghost" id="rvcLibrary">📚 My voices</button>
+            <button type="button" class="ghost" id="rvcDelete" hidden>🗑 Delete this voice permanently</button>
+          </div>
+          <div class="load-bar" id="rvcBar" hidden role="progressbar" aria-label="Importing the voice"><i></i><span></span><b>0%</b></div>
+          <label>Speak with
+            <select id="rvcBase">
+              <option value="own">The voice picked above</option>
+              <optgroup label="A female voice in the chosen language">
+                <option value="female_high">Female · high</option>
+                <option value="female">Female · normal</option>
+                <option value="female_low">Female · low</option>
+              </optgroup>
+              <optgroup label="A male voice in the chosen language">
+                <option value="male_high">Male · high</option>
+                <option value="male">Male · normal</option>
+                <option value="male_low">Male · low</option>
+              </optgroup>
+            </select>
+          </label>
+          <div class="sliders">
+            <label>Clone pitch <output id="rvcPitchOut">0</output>
+              <input type="range" id="rvcPitch" min="-24" max="24" step="1" value="0">
+            </label>
+            <label>Likeness (index) <output id="rvcIndexOut">50%</output>
+              <input type="range" id="rvcIndex" min="0" max="100" step="5" value="50">
+            </label>
+          </div>
+          <p class="note" id="rvcNote">Changes the voice above into the cloned voice. Works in English, Tagalog, Japanese and Korean. Female voice → male clone: try pitch −12. Male → female: +12.</p>
+        </fieldset>
+        <label>3D model
+          <select name="model" id="modelSelect"></select>
+        </label>
+        <label class="check"><input type="checkbox" name="flip"> Turn model around (if it faces the wall)</label>
+        <label>Gets around by
+          <select name="travel" id="travelSelect">
+            <option value="">What its body suits</option>
+            <option value="walk">Walking (if it has legs)</option>
+            <option value="fly">Flying (if it has wings)</option>
+            <option value="hover">Hovering</option>
+          </select>
+        </label>
+        <label>Hat
+          <select name="hat" id="hatSelect">
+            <option value="">Seasonal (changes with the day)</option>
+            <option value="none">No hat</option>
+            <option value="beanie">Beanie</option>
+            <option value="cap">Cap</option>
+            <option value="crown">Crown</option>
+            <option value="party">Party hat</option>
+            <option value="santa">Santa hat</option>
+            <option value="witch">Witch hat</option>
+            <option value="headband">Headband</option>
+            <option value="headphones">Headphones</option>
+          </select>
+        </label>
+        <div class="row" id="lookRow" hidden>
+          <label>Outfit <select name="outfit" id="outfitSelect"></select></label>
+          <label>Hair <select name="hair" id="hairSelect"></select></label>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost" id="importModel" title="A .glb, .fbx or .vrm file, or a .zip with one inside">Import a model…</button>
+          <button type="button" class="ghost" id="importFolder" title="Searches a folder for the model and its textures">Import a folder…</button>
+          <button type="button" class="ghost" id="modelLibrary" title="Every model you've saved: use, animate or delete them for good">📚 My models</button>
+          <button type="button" class="ghost" id="rigModel" title="Give the model bones, then animate it with UniMate">🦴 Rig &amp; animate</button>
+          <button type="button" class="ghost" id="deleteAnimated" title="Removes every model saved with animations">🗑 Delete animated models</button>
+        </div>
+        <div class="row">
+          <button type="submit" class="primary">Save character</button>
+          <button type="button" class="ghost" id="useChar">Talk to this character</button>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost" id="shareChar" title="Save this character as one .vermeil file to send to a friend">📤 Share this character</button>
+          <label class="check"><input type="checkbox" id="shareVoice" checked> with the voice clone</label>
+        </div>
+        <button type="button" class="danger" id="deleteChar">Delete character</button>
+      </form>
+    </section>
+
+
+    <section class="panel" id="panel-settings" hidden aria-label="Settings">
+      <header><h2>Settings</h2><button class="close" aria-label="Close">×</button></header>
+      <h3>Plugins</h3>
+      <div id="setPlugins">
+        <p class="note" id="pluginsIntro">Pick the features you want. Install adds what a feature needs (packages, models, files); Uninstall removes them to free space. You can change this any time.</p>
+        <div class="row plugin-bar">
+          <button class="primary small" id="pluginsInstallSel">Install selected</button>
+          <button class="ghost small" id="pluginsSelAll">Select all</button>
+          <button class="ghost small" id="pluginsRefresh">Refresh</button>
+          <span class="note" id="pluginsTotal"></span>
+        </div>
+        <div id="pluginList" class="plugin-list"></div>
+      </div>
+
+      <h3>Voice commands</h3>
+      <p class="note">Say “vermi” and then any of these (or type them in the chat). Every feature in the sidebar opens with
+        “open …”, like “open the gym”. You don't have to say them exactly: your companion understands your own words too.
+        Say “what can I say?” to come back here.</p>
+      <input type="search" id="voiceHelpFind" placeholder="Find a command (e.g. timer, music, reminder)" aria-label="Find a voice command">
+      <div id="voiceHelp" class="help-list"></div>
+
+      <h3>Your face</h3>
+      <p class="note" id="faceNote">Teach the AI your face so it knows when it's you.</p>
+      <img class="preview" id="preview" alt="Camera preview" hidden>
+      <div class="progress" id="enrollBar" hidden><span></span></div>
+      <label>Your name <input id="ownerName" maxlength="30" placeholder="JP"></label>
+      <div class="row">
+        <button class="primary" id="enrollBtn">Teach my face</button>
+        <button class="ghost" id="forgetBtn">Forget my face</button>
+      </div>
+      <label class="check"><input type="checkbox" data-setting="privacy_mode"> 🔒 Camera privacy mode — the camera and "look at me" stay off until I turn this off</label>
+
+      <h3>People your companion knows</h3>
+      <p class="note">Teach your companion the faces of family or friends so they get greeted by name. Faces are stored only on this PC.</p>
+      <ul class="prefs" id="peopleList"></ul>
+      <div class="row">
+        <input id="personName" maxlength="30" placeholder="Name, e.g. Mia" aria-label="Their name">
+        <input id="personRelation" maxlength="30" placeholder="Who, e.g. sister" aria-label="Who they are to you">
+      </div>
+      <button id="personEnroll">Teach their face (they look at the camera)</button>
+
+      <h3>Companion life</h3>
+      <label class="check"><input type="checkbox" data-setting="idle_activities"> Let your companion wander and do little things when we're not talking</label>
+      <label class="check"><input type="checkbox" data-setting="sleep_at_night"> Sleeps in bed late at night (11 pm – 5 am)</label>
+      <label class="check"><input type="checkbox" data-setting="outfit_auto"> 👗 Dress your companion for the day (time, weather, season, holidays)</label>
+      <label class="check"><input type="checkbox" data-setting="call_reminders"> 📞 Reminders ring like a phone call</label>
+      <label class="check"><input type="checkbox" data-setting="screen_time"> ⏱️ Count my screen time (which app is in front; Focus → My progress → Screen time)</label>
+      <label class="inline">🎂 My birthday (month-day) <input id="myBirthday" placeholder="03-21" maxlength="10" size="7"></label>
+      <details class="wardrobe"><summary>👗 Wardrobe</summary><div id="wardrobeBox"></div></details>
+      <label class="check"><input type="checkbox" data-setting="scene_transitions"> Change the room lighting for study, focus and story time</label>
+      <label class="check"><input type="checkbox" data-setting="gym_room"> Switch to the gym room while a workout is running</label>
+      <label class="check"><input type="checkbox" data-setting="gesture_mode"> Hand gestures through the camera (👍 = yes, ✋ = stop talking/pause music, 👋 = wave) — uses the vision AI every few seconds</label>
+
+      <h3>What your companion remembers about you</h3>
+      <p class="note">Learned from things you say, like “call me JP” or “I love matcha”. Click × to forget one.</p>
+      <ul class="prefs" id="prefList"></ul>
+      <button class="danger" id="forgetAll">Forget everything my companion learned about me</button>
+
+      <h3>Sounds &amp; effects</h3>
+      <label class="check"><input type="checkbox" id="sfxOn"> Sound effects</label>
+      <label>Volume <output id="sfxVolOut">50%</output>
+        <input type="range" id="sfxVol" min="0" max="100" step="5" value="50">
+      </label>
+      <label class="check"><input type="checkbox" id="bgmOn"> Background music in the room (a soft PSP-style tune; it rests while your own music plays)</label>
+      <label>Music volume <output id="bgmVolOut">50%</output>
+        <input type="range" id="bgmVol" min="0" max="100" step="5" value="50">
+      </label>
+      <label>Room music <select id="bgmTheme"></select></label>
+      <label>Button sound <select id="sfxStyle"></select></label>
+      <label>Button pitch <select id="sfxPitch"></select></label>
+      <label class="check"><input type="checkbox" id="fxOn"> Animations and visual effects</label>
+      <label>Timer alarm volume <output id="alarmVolOut">90%</output>
+        <input type="range" id="alarmVol" min="0" max="100" step="5" value="90">
+      </label>
+      <button class="ghost small" id="alarmTest">Test the alarm</button>
+
+      <h3>Internet &amp; calendar</h3>
+      <label>Your city (weather, alerts, morning briefing) <input id="homeCity" placeholder="e.g. Manila"></label>
+      <label>News topics, separated by commas <input id="newsTopics" placeholder="Philippines, AI, engineering"></label>
+      <label class="check"><input type="checkbox" data-setting="morning_briefing"> Morning briefing the first time I open Vermeil each day</label>
+      <label>Google Calendar — “Secret address in iCal format”
+        <input id="icalUrl" type="password" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">
+      </label>
+      <p class="note">Google Calendar → Settings → your calendar → Integrate calendar → Secret address in iCal format. Vermeil copies your events into the Planner every 30 minutes (read-only).</p>
+      <div class="row"><button class="ghost small" id="icalSync">Sync now</button><button class="ghost small" id="icalExport">Export my events for Google</button></div>
+      <p class="note" id="icalStatus"></p>
+      <details class="gcal-help">
+        <summary>Let your companion ADD events to Google Calendar too (one-time setup, ~5 min)</summary>
+        <ol class="note">
+          <li>Open <a href="#" data-open="https://console.cloud.google.com/">console.cloud.google.com</a> → create a project (e.g. “Vermeil”).</li>
+          <li>APIs &amp; Services → Library → “Google Calendar API” → <b>Enable</b>.</li>
+          <li>OAuth consent screen → External → app name + your email → add yourself as a <b>Test user</b>.</li>
+          <li>Credentials → Create credentials → OAuth client ID → <b>Desktop app</b> → Download JSON.</li>
+          <li>Here: choose that file, then Connect. Google asks you once.</li>
+        </ol>
+        <p class="note">Needs once: <code>pip install google-api-python-client google-auth-oauthlib</code></p>
+      </details>
+      <div class="row"><button class="ghost small" id="gcalFile">Choose the downloaded file</button><button class="small" id="gcalConnect">Connect</button><button class="ghost small" id="gcalOff" hidden>Disconnect</button></div>
+      <p class="note" id="gcalStatus"></p>
+
+      <h3>This computer</h3>
+      <p class="note">Vermeil looks at this computer and picks how hard to work. <b>Low</b> = for older or small laptops: a lighter
+        voice, no voice clone, the small speech model and a simpler 3D room, so everything stays quick. On <b>Auto</b> a laptop on a low
+        battery switches to Low by itself and back when you plug in. Say “low power mode”, “full power” or “scan my PC”.</p>
+      <label>Performance
+        <select id="perfMode">
+          <option value="auto">Auto (recommended)</option><option value="low">Low-end PC</option>
+          <option value="normal">Normal</option><option value="high">High</option>
+        </select>
+      </label>
+      <p class="note" id="perfWhy"></p>
+      <div class="row"><button class="ghost small" id="perfScan">Scan again</button></div>
+
+      <h3>This PC</h3>
+      <div id="pcBox" class="note">Open this panel to see your PC's status.</div>
+      <div class="row"><button class="ghost small" id="pcRefresh">Refresh</button><button class="ghost small" id="pcCrashes">Check for app crashes</button></div>
+      <div id="pcCrashList" class="note"></div>
+      <label class="check"><input type="checkbox" data-setting="desktop_notifications"> Windows notifications for reminders</label>
+      <label class="check"><input type="checkbox" data-setting="hotkeys"> Keyboard shortcuts (work even when Vermeil is in the background; restart to apply)</label>
+      <ul class="note hotkeys">
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> voice on/off</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> bring Vermeil up and type</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd> hide/show Vermeil</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> explain what's on my screen</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Esc</kbd> emergency stop (speech, music, timers, macros, changes)</li>
+      </ul>
+      <h3>Macros</h3>
+      <p class="note">Repeatable lists of steps. Make one by saying, e.g. “make a macro called study mode: open my notes, play lofi, set volume to 30”.</p>
+      <ul class="prefs" id="macroList"></ul>
+
+      <h3>AI</h3>
+      <label>Which AI answers
+        <select id="aiProvider">
+          <option value="auto">Auto: Groq first, local AI when Groq runs out</option>
+          <option value="groq">Groq only (online)</option>
+          <option value="local">Local AI only (offline, Ollama)</option>
+        </select>
+      </label>
+      <div id="aiStatus" class="note">Checking…</div>
+      <p class="note" id="aiRecNote"></p>
+      <div class="row"><button type="button" class="primary" id="aiRecInstall">⬇ Install recommended model</button></div>
+      <div class="clone-bar" id="aiRecBar" hidden><i></i><span></span></div>
+
+      <h3>Behaviour</h3>
+      <label>How your companion talks
+        <select id="styleSelect">
+          <option value="companion">Companion (normal, playful)</option>
+          <option value="tutor">Tutor (explains step by step)</option>
+          <option value="strategist">Strategist (plans, options, risks)</option>
+          <option value="assistant">Professional assistant (short, no teasing)</option>
+          <option value="coach">Rehearsal coach (practise interviews, hard talks)</option>
+        </select>
+      </label>
+      <label>Humor
+        <select id="humorSelect">
+          <option value="0">None — sincere</option>
+          <option value="1">Light</option>
+          <option value="2">Playful</option>
+          <option value="3">Playful + a bit sarcastic</option>
+        </select>
+      </label>
+      <p class="note">It tones down automatically when you seem sad or stressed.</p>
+      <label>Voice style
+        <select id="voiceStyleSelect">
+          <option value="normal">Normal</option>
+          <option value="whisper">Whisper (soft and quiet)</option>
+          <option value="energetic">Energetic</option>
+          <option value="storyteller">Dramatic storyteller</option>
+          <option value="calm">Calm and soothing</option>
+          <option value="cute">Cute</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" data-setting="stream_speech"> Start talking while the answer is still being written (much faster replies)</label>
+      <label class="check"><input type="checkbox" data-setting="noise_filter"> Clean background noise from my voice (fan, aircon, street)</label>
+      <label class="check"><input type="checkbox" data-setting="duck_audio"> Lower music and other sounds while I give a command and while your companion answers (they come back after)</label>
+
+      <h3>My wake word</h3>
+      <p class="note" id="wakeNote">Teach your companion how YOU say “vermi”: click Record and say it — 4 times. Then it wakes up to your voice instantly, offline.</p>
+      <div class="wake-dots" id="wakeDots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="row">
+        <button class="primary" id="wakeRecord">🎙 Record “vermi”</button>
+        <button id="wakeSave" disabled>Save</button>
+        <button class="ghost" id="wakeTest">Test it</button>
+        <button class="ghost" id="wakeClear">Reset</button>
+      </div>
+      <label>How easily your companion wakes up
+        <select id="wakeSens"><option value="1">Strict (fewer mistakes)</option><option value="2">Normal</option><option value="3">Easy (noisy room / far away)</option></select>
+      </label>
+      <label class="check"><input type="checkbox" data-setting="clap_wake"> 👏👏 A double clap wakes your companion up too</label>
+      <label class="check"><input type="checkbox" data-setting="barge_in"> Let me interrupt by talking (works best with headphones)</label>
+      <label class="check"><input type="checkbox" data-setting="self_check"> Double-check answers before replying (slower, fewer mistakes)</label>
+      <label class="check"><input type="checkbox" data-setting="quiet_mode"> Quiet mode: don't talk unless I talk first (reminders still come)</label>
+      <label class="check"><input type="checkbox" data-setting="context_aware"> Notice what I'm doing (reads the name of the window I'm using, e.g. coding or gaming)</label>
+      <label class="check"><input type="checkbox" data-setting="watch_objects"> Spot everyday things through the camera (cup, phone, book…) — offline; a phone in hand during focus counts as a distraction</label>
+      <label class="check"><input type="checkbox" data-setting="code_auto_write"> Coding helper: write files in projects it created without asking each time (running commands still asks)</label>
+      <label class="check"><input type="checkbox" data-setting="keep_screens"> Keep screenshots your companion looks at so I can find them later (Chat → Screenshots)</label>
+      <label class="check"><input type="checkbox" data-setting="always_look"> Look through the camera every time I talk</label>
+      <p class="note">When this is off, the camera is only used when you ask things like “what am I holding?”.</p>
+      <label class="check"><input type="checkbox" data-setting="speak_replies"> Speak replies out loud</label>
+      <label class="check"><input type="checkbox" data-setting="greet_on_sight"> Greet me when the camera sees me</label>
+      <label class="check"><input type="checkbox" data-setting="mirror_look"> Flip which way the character looks at me</label>
+      <label class="check"><input type="checkbox" data-setting="camera_on_start"> Camera on when the app opens (remembers your last choice)</label>
+      <label class="check"><input type="checkbox" data-setting="listen_on_start"> Voice on when the app opens (remembers your last choice)</label>
+          <h3>Theme colours</h3>
+      <div class="theme-swatches" id="themeSwatches"></div>
+      <div class="row">
+        <label>Accent <input type="color" id="themeAccent" value="#3e8eff"></label>
+        <label>Background <input type="color" id="themeBg" value="#000000"></label>
+        <label>Panels <input type="color" id="themePanel" value="#16191e"></label>
+      </div>
+      <h3>Voice &amp; camera</h3>
+      <div class="row">
+        <button type="button" class="ghost" id="setVoiceBtn">Voice: off</button>
+        <button type="button" class="ghost" id="setCameraBtn">Camera: off</button>
+      </div>
+      <div class="dev-pick" id="devicePick">
+        <label>📷 Camera <select id="camSelect" aria-label="Camera"><option value="-1">Automatic</option></select></label>
+        <label>🎙 Microphone <select id="micSelect" aria-label="Microphone"><option value="-1">Automatic (Windows default)</option></select></label>
+        <button type="button" class="ghost small" id="findDevices" title="Checks every camera and microphone again">🔄 Find devices</button>
+      </div>
+      <p class="note" id="devNote">Only cameras that really give a picture are listed.</p>
+      <label>Pronunciations (one per line: <code>word = how to say it</code>)
+        <textarea id="pronunciations" rows="4" spellcheck="false" placeholder="Vermeil = Ver-may&#10;Kuya = Koo-yah&#10;SQL = sequel"></textarea>
+      </label>
+      <button type="button" class="ghost small" id="savePronunciations">Save pronunciations</button>
+      <p class="note">Common chat words are already fixed for you (idk, btw, omg, AI…). Your own list wins.</p>
+      <h3>Update <span class="upd-dot" id="updDotTitle" hidden title="A new version is ready"></span></h3>
+      <p class="note">Gets the newest Vermeil from GitHub. Your settings, memories, keys and characters stay as they are.</p>
+      <div class="row"><button type="button" class="primary" id="appUpdate">⬇ Update Vermeil</button>
+        <button type="button" class="ghost" id="appRestart" hidden>↻ Restart now</button></div>
+      <div class="clone-bar" id="appUpdateBar" hidden><i></i><span></span></div>
+      <p class="note" id="appUpdateNote"></p>
+      <h3>Backup</h3>
+      <p class="note">Everything you saved (chats, memories, characters, room, planner, progress, settings) in one .zip. Keys and sign-ins are never included.</p>
+      <label class="check"><input type="checkbox" id="backupBig"> Also the big files: voice clones, 3D models and the Study library (can be 1 GB+)</label>
+      <div class="row"><button type="button" class="primary" id="backupMake">💾 Make a backup</button>
+        <button type="button" class="ghost" id="backupRestore">📂 Restore a backup…</button></div>
+      <p class="note" id="backupNote"></p>
+      <h3>🧹 Clean-up wizard</h3>
+      <div id="cleanupBox"></div>
+      <h3>Sidebar</h3>
+      <p class="note">Turn features off to hide them from the menu. Turn them back on any time.</p>
+      <div id="sidebarToggles"></div>
+      <h3>Animation test</h3>
+      <p class="note">Tap a button to play it on the character right now. Close Settings to watch better.</p>
+      <div id="animTest"></div>
+    </section>
+
+    <div class="approvals" id="approvals" aria-live="assertive"></div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <div class="tip" id="tip" hidden></div>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

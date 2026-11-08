@@ -1,0 +1,431 @@
+// social.js - the social layer: notifications, messages with in-game friends, the test friend, the Socialize navigator (Events, Rooms, Me, Official, Search) and what happens inside the hubs.
+// Real people come through friends.js, directly between PCs. With no server there's no public list of rooms, so the people and rooms listed here are clearly labelled samples. Everything goes through api.social_load / api.social_save.
+import { THEMES } from "./cozyroom.js";
+import { OFFICIAL_HUBS } from "./hubinfo.js";
+// the hubs' own code is big (every hub's buildings and exhibits): it loads the first time you go into a hub, not when the app starts
+let hubsMod = null;
+const hubsJs = () => (hubsMod ||= import("./hubs.js"));
+const buildHub = async (key, arg) => (await hubsJs()).buildHub(key, arg);
+import { hubEntered, openHubEditor } from "./hubedit.js";
+import { boardRows, boardIsLive, fmtV } from "./hubboard.js";
+
+const TEST_FRIEND = { id: "test-friend", name: "Test Friend", color: "#6fd3ff", status: "Always online, for testing" };
+const STALL_RENT = 0;      // Lumen to rent a stall. Free until there's a real server and real renters
+const SAMPLE_ROOMS = [
+  { id: "s-neon", owner: "Mika", name: "Mika's neon den", desc: "Lo-fi, purple light and a city view.", theme: "neon", visitors: 7 },
+  { id: "s-loft", owner: "Jun", name: "Jun's wooden loft", desc: "Warm and bright. Come and study.", theme: "loft", visitors: 3 },
+  ...Object.entries(THEMES).filter(([k]) => k !== "neon" && k !== "loft").slice(0, 4).map(([k, t], i) => (
+    { id: `s-${k}`, owner: ["Noor", "Kai", "Lia", "Theo"][i], name: `${["Noor", "Kai", "Lia", "Theo"][i]}'s room`, desc: String(t.label || "A room to visit."), theme: k, visitors: 2 + ((i * 5) % 9) })),
+];
+const SMALL_TALK = ["Haha, right?", "Nice to meet you!", "What brings you here?", "I come here most evenings.", "That's so true.", "Tell me more!", "Have you seen the other hubs yet?", "I like it here."];
+const FRIEND_TALK = ["Got it! Message received. ✅", "Hey! Works on my end.", "Reading you loud and clear.", "Send me an invite and I'll come over.", "I'm only a test friend, but I'm listening."];
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const newId = () => Math.random().toString(36).slice(2, 10);
+const when = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+export function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k === "on") for (const [n, f] of Object.entries(v)) e.addEventListener(n, f);
+    else if (k in e) e[k] = v; else e.setAttribute(k, v);
+  }
+  e.append(...kids.filter((x) => x != null));
+  return e;
+}
+
+export function initSocial({ api, room, toast, openPanel, games, saveHome, canOpen = () => true }) {
+  const $ = (id) => document.getElementById(id);
+  let db = { notes: [], threads: {}, friends: [TEST_FRIEND], favorites: [], myRooms: [], events: [], stalls: {}, friendHere: false };
+  let tab = "official", thread = null, saveTimer = null, query = "";
+
+  const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => api?.social_save?.(db), 300); };
+  const hooks = {}, choices = {};        // friends.js fills these: real people on other PCs
+  const friend = (id) => db.friends.find((f) => f.id === id) || hooks.visitor?.(id);
+
+  // ---------- notifications ----------
+  function notify(text, act = null) {
+    db.notes.unshift({ id: newId(), t: Date.now(), text, read: false, act });
+    db.notes = db.notes.slice(0, 60);
+    save(); renderNotes();
+    toast(text, 3000);
+  }
+  function doNote(n) {
+    if (n.act?.thread) { $("notifPop").hidden = true; openThread(n.act.thread); }
+    else if (n.act?.tab) { $("notifPop").hidden = true; openNavigator(n.act.tab); }
+  }
+  /** an invite or a friend request: answered once */
+  function answer(n, yes) {
+    const act = n.act;
+    n.act = null; save(); renderNotes();
+    choices[act.choice]?.(act, yes);
+  }
+  function renderNotes() {
+    const unread = db.notes.filter((n) => !n.read).length, badge = $("notifBadge");
+    badge.textContent = unread > 9 ? "9+" : unread; badge.hidden = !unread;
+    const pop = $("notifPop");
+    if (pop.hidden) return;
+    pop.replaceChildren(
+      el("header", {}, el("b", {}, "Notifications"), db.notes.length ? el("button", { type: "button", class: "ghost small", textContent: "Clear all", on: { click: () => { db.notes = []; save(); renderNotes(); } } }) : null),
+      db.notes.length ? el("ul", {}, ...db.notes.map((n) => el("li", { class: n.read ? "" : "unread", on: { click: () => doNote(n) } }, el("span", {}, n.text), el("small", {}, when(n.t)),
+        n.act?.choice ? el("div", { class: "note-choice" },
+          el("button", { type: "button", class: "primary small", textContent: "Accept", on: { click: (e) => { e.stopPropagation(); answer(n, true); } } }),
+          el("button", { type: "button", class: "ghost small", textContent: "Decline", on: { click: (e) => { e.stopPropagation(); answer(n, false); } } })) : null)))
+        : el("p", { class: "note" }, "Nothing yet. Invites and messages show up here."));
+  }
+  $("notifBtn").addEventListener("click", () => {
+    const pop = $("notifPop"); pop.hidden = !pop.hidden;
+    if (!pop.hidden) { renderNotes(); db.notes.forEach((n) => { n.read = true; }); save(); $("notifBadge").hidden = true; }
+  });
+
+  // ---------- messages: friends and one thread at a time ----------
+  const unreadFrom = (id) => (db.threads[id] || []).filter((m) => m.from !== "me" && !m.seen).length;
+  function renderMessagesBadge() {
+    const n = db.friends.reduce((sum, f) => sum + unreadFrom(f.id), 0), b = $("msgBadge");
+    b.textContent = n > 9 ? "9+" : n; b.hidden = !n;
+  }
+  function renderMessages() {
+    renderMessagesBadge();
+    const pop = $("msgPop");
+    if (pop.hidden) return;
+    const close = el("button", { type: "button", class: "close", "aria-label": "Close", textContent: "×", on: { click: () => { pop.hidden = true; } } });
+    const f = thread && friend(thread);
+    if (!f) {
+      pop.replaceChildren(el("header", {}, el("b", {}, "Messages"), close),
+        el("ul", { class: "msg-friends" }, ...db.friends.map((x) => {
+          const last = (db.threads[x.id] || []).at(-1), n = unreadFrom(x.id);
+          return el("li", { on: { click: () => openThread(x.id) } }, el("i", { class: "dot", style: `background:${x.color}` }),
+            el("span", {}, el("b", {}, x.name), el("small", {}, last ? last.text : x.status || "")), n ? el("em", {}, String(n)) : null);
+        })));
+      return;
+    }
+    (db.threads[f.id] || []).forEach((m) => { m.seen = true; }); renderMessagesBadge(); save();
+    const here = room.friendId === f.id || hooks.isHere?.(f.id);
+    const log = el("ol", { class: "msg-log" }, ...(db.threads[f.id] || []).map((m) => el("li", { class: m.from === "me" ? "me" : "them", textContent: m.text })));
+    if (!log.children.length) log.append(el("li", { class: "sys", textContent: "Say hello, or send an invite." }));
+    const input = el("input", { type: "text", placeholder: `Message ${f.name}…`, "aria-label": "Message" });
+    pop.replaceChildren(
+      el("header", {}, el("button", { type: "button", class: "ghost small", textContent: "‹", "aria-label": "Back", on: { click: () => { thread = null; renderMessages(); } } }), el("b", {}, f.name), close),
+      el("div", { class: "msg-actions" }, here
+        ? el("button", { type: "button", class: "ghost small", textContent: "👋 Send home", on: { click: () => sendHome(f) } })
+        : el("button", { type: "button", class: "primary small", textContent: "✉ Invite to this room", on: { click: () => invite(f) } })),
+      log,
+      el("form", { class: "msg-send", on: { submit: (e) => { e.preventDefault(); const t = input.value.trim(); if (t) { send(f, t); } } } }, input, el("button", { type: "submit", textContent: "Send" })));
+    log.scrollTop = log.scrollHeight;
+    input.focus();
+  }
+  function openThread(id) { thread = id; $("msgPop").hidden = false; renderMessages(); }
+  function say(id, from, text) { (db.threads[id] ||= []).push({ from, text, t: Date.now() }); db.threads[id] = db.threads[id].slice(-200); save(); }
+  function send(f, text) {
+    say(f.id, "me", text); renderMessages();
+    if (f.code) { hooks.dm(f, text); return; }
+    setTimeout(() => {
+      say(f.id, f.id, pick(f.id === TEST_FRIEND.id ? FRIEND_TALK : SMALL_TALK));
+      if ($("msgPop").hidden || thread !== f.id) notify(`${f.name} sent you a message.`, { thread: f.id });
+      renderMessages();
+    }, 1000 + Math.random() * 900);
+  }
+  const showFriend = (f) => {
+    room.friendId = f.id;
+    room.roamers.add({ id: f.id, name: f.name, color: f.color });
+  };
+  function invite(f) {
+    if (f.code) { hooks.invite(f); return; }
+    if (hooks.testBanned?.()) { toast(`${f.name} is banned for now. You can lift it in Friends.`, 3000); return; }
+    say(f.id, "me", "✉ Come and join me in my room!"); renderMessages();
+    toast(`Invite sent to ${f.name}.`, 2000);
+    setTimeout(() => {
+      say(f.id, f.id, "On my way!");
+      showFriend(f);
+      db.friendHere = f.id; save();
+      notify(`${f.name} accepted your invite and is here now.`, { thread: f.id });
+      renderMessages();
+    }, 2000);
+  }
+  function sendHome(f) {
+    if (hooks.isHere?.(f.id)) { hooks.kick(f.id); renderMessages(); return; }
+    if (room.friendId === f.id) { room.friendId = null; room.roamers.remove(f.id); }
+    db.friendHere = false; save(); renderMessages();
+    toast(`${f.name} went home.`, 2000);
+  }
+  $("msgBtn").addEventListener("click", () => { const p = $("msgPop"); p.hidden = !p.hidden; if (!p.hidden) { thread = null; renderMessages(); } });
+
+  // ---------- talking to people in a hub ----------
+  function conversation({ title, kind, people }) {
+    const box = $("hubChat"), log = el("ol", { class: "msg-log" }), input = el("input", { type: "text", placeholder: kind === "public" ? "Say something to everyone here…" : "Say something…", "aria-label": "Say something" });
+    const line = (who, text, cls = "them") => { log.append(el("li", { class: cls }, who ? el("b", {}, `${who}: `) : null, text)); log.scrollTop = log.scrollHeight; };
+    const lone = people.length === 1 ? people[0] : null, addable = lone && !friend(lone.id) && lone.id !== TEST_FRIEND.id;
+    box.hidden = false;
+    box.replaceChildren(
+      el("header", {}, el("b", {}, title), el("span", { class: `chat-kind ${kind}`, textContent: kind === "public" ? "Public" : "Private" }),
+        addable ? el("button", { type: "button", class: "ghost small", textContent: "➕ Add friend", on: { click: (e) => {
+          db.friends.push({ id: lone.id, name: lone.name, color: lone.color, status: "Sample person" }); save(); e.target.remove(); toast(`${lone.name} is in your friends now.`, 2000);
+        } } }) : null,
+        el("button", { type: "button", class: "close", "aria-label": "Close", textContent: "×", on: { click: () => { box.hidden = true; } } })),
+      log,
+      el("form", { class: "msg-send", on: { submit: (e) => {
+        e.preventDefault();
+        const t = input.value.trim(); if (!t) return;
+        input.value = ""; line(null, t, "me");
+        if (!people.length) return;
+        setTimeout(() => line(pick(people).name, pick(SMALL_TALK)), 800 + Math.random() * 800);
+      } } }, input, el("button", { type: "submit", textContent: "Send" })));
+    if (people.length) line(pick(people).name, kind === "public" ? "Hi! Pull up a chair, everyone can hear you here." : "Oh, hi there!");
+    else line(null, "It's just you here for now.", "sys");
+    input.focus();
+  }
+  const hubPeople = () => (room.hub?.people || []);
+  room.onRoamer = (id) => {
+    if (hooks.person?.(id)) return;
+    if (friend(id) && room.friendId === id) { room.walkToPerson(id, () => openThread(id)); return; }
+    const p = hubPeople().find((x) => x.id === id);
+    if (p) room.walkToPerson(id, () => conversation({ title: p.name, kind: "private", people: [p] }));
+  };
+
+  // ---------- a small choice dialog ----------
+  function dialog(title, ...kids) {
+    const close = () => wrap.remove();
+    const wrap = el("div", { class: "soc-dialog", on: { pointerdown: (e) => { if (e.target === wrap) close(); } } },
+      el("div", { class: "soc-card" }, el("header", {}, el("h3", {}, title), el("button", { type: "button", class: "close", "aria-label": "Close", textContent: "×", on: { click: close } })), ...kids));
+    $("hubChat").parentElement.append(wrap);
+    return close;
+  }
+  function tableChoice() {
+    const close = dialog("You sit down at the table",
+      el("p", { class: "note" }, "Who do you want to talk with?"),
+      el("button", { type: "button", class: "primary", textContent: "🔒 Private conversation", on: { click: () => { close(); privateWith(); } } }),
+      el("button", { type: "button", class: "ghost", textContent: "📣 Public conversation (everyone in the café)", on: { click: () => { close(); conversation({ title: `${room.hub?.name || "Here"} table`, kind: "public", people: hubPeople() }); } } }));
+  }
+  function privateWith() {
+    const options = [...hubPeople(), ...db.friends.filter((f) => room.friendId === f.id)];
+    const close = dialog("Talk privately with…", ...options.map((p) =>
+      el("button", { type: "button", class: "ghost", textContent: p.name, on: { click: () => { close(); conversation({ title: p.name, kind: "private", people: [p] }); } } })));
+  }
+
+  // ---------- rental stalls ----------
+  const myStall = () => Object.entries(db.stalls).find(([, s]) => s.owner === "me");
+  async function refreshStalls() {
+    if (room.hub?.key !== "stalls") return;
+    const hub = await buildHub("stalls", db.stalls), c = room.char;
+    if (c) hub.spawn = [c.root.position.x, c.root.position.z];
+    const cam = room.camera.position.clone(), target = room.controls.target.clone();
+    room.enterHub(hub);
+    room.camera.position.copy(cam); room.controls.target.copy(target); room.controls.update();
+  }
+  /** to the hall, standing at the front of your own stall (or at the entrance if you don't have one) */
+  async function goToMyStall(setup = false) {
+    const mine = myStall(), hub = await buildHub("stalls", db.stalls);
+    const it = mine && hub.layout.items.find((i) => i.type === "hubStall" && i.idx === +mine[0]);
+    if (it) hub.spawn = [it.x + Math.sin(it.rot || 0) * 2.6, it.z + Math.cos(it.rot || 0) * 2.6];
+    go(hub);
+    if (it && setup) setTimeout(() => customizeStall(+mine[0]), 900);
+  }
+  /** you already have a stall: take your stall (name, look, goods) over to this one */
+  function moveStall(idx) {
+    const mine = myStall(); if (!mine) return rent(idx);
+    db.stalls[idx] = { ...mine[1] }; delete db.stalls[mine[0]];
+    save(); refreshStalls();
+    notify(`Your stall moved to stall ${idx + 1}.`);
+  }
+  async function rent(idx) {
+    const mine = myStall();
+    if (mine) { moveStall(idx); return; }
+    if (STALL_RENT) {
+      const res = await api.quest_buy(`stall_${idx}`, STALL_RENT, `Stall ${idx + 1}`);
+      if (res?.error) { toast(res.error); return; }
+    }
+    db.stalls[idx] = { owner: "me", name: "My stall", tagline: "", color: "#7c5cff", goods: [] };
+    save(); refreshStalls();
+    customizeStall(idx);
+    notify(`You rented stall ${idx + 1}. It's yours to set up.`);
+  }
+  async function customizeStall(idx) {
+    const { STALL_GOODS, STALL_SLOT_COUNT } = await hubsJs();
+    const s = db.stalls[idx];
+    const name = el("input", { type: "text", maxLength: 28, value: s.name, "aria-label": "Stall name" });
+    const tagline = el("input", { type: "text", maxLength: 60, value: s.tagline || "", placeholder: "What's at your stall?", "aria-label": "Tagline" });
+    const color = el("input", { type: "color", value: s.color, "aria-label": "Banner colour" });
+    const slots = Array.from({ length: STALL_SLOT_COUNT }, (_, i) => el("select", { "aria-label": `Spot ${i + 1}` },
+      el("option", { value: "", textContent: "(empty)" }), ...STALL_GOODS.map((g) => el("option", { value: g.type, textContent: g.label, selected: s.goods?.[i] === g.type }))));
+    const close = dialog(`Set up stall ${idx + 1}`,
+      el("label", {}, "Name", name), el("label", {}, "Tagline", tagline), el("label", { class: "inline" }, "Banner colour", color),
+      el("p", { class: "note" }, "What's on show:"), el("div", { class: "stall-slots" }, ...slots),
+      el("div", { class: "row" },
+        el("button", { type: "button", class: "primary", textContent: "Save", on: { click: () => {
+          Object.assign(s, { name: name.value.trim() || "My stall", tagline: tagline.value.trim(), color: color.value, goods: slots.map((x) => x.value) });
+          save(); close(); refreshStalls(); toast("Your stall is updated.", 2000);
+        } } }),
+        el("button", { type: "button", class: "danger", textContent: "Give up this stall", on: { click: () => { delete db.stalls[idx]; save(); close(); refreshStalls(); toast(`Stall ${idx + 1} is empty again.`, 2000); } } })));
+  }
+  function stallClick(item) {
+    const idx = item.spec.idx, s = db.stalls[idx];
+    if (s?.owner === "me") { customizeStall(idx); return; }
+    if (s) { dialog(s.name, el("p", {}, s.tagline || "Have a look around.")); return; }
+    const mine = myStall();
+    if (mine) {                                                    // one stall each: offer to move yours here instead of a dead end
+      const close = dialog(`Stall ${idx + 1} is empty`,
+        el("p", { class: "note" }, `You already have "${mine[1].name}" at stall ${+mine[0] + 1}. You can move it here, with everything on it.`),
+        el("div", { class: "row" },
+          el("button", { type: "button", class: "primary", textContent: "🎪 Move my stall here", on: { click: () => { close(); moveStall(idx); } } }),
+          el("button", { type: "button", textContent: "Go to my stall", on: { click: () => { close(); goToMyStall(); } } })));
+      return;
+    }
+    const close = dialog(`Stall ${idx + 1} is empty`,
+      el("p", { class: "note" }, STALL_RENT ? `Rent it for ${STALL_RENT} Lumen and make it yours.` : "Rent it and make it yours. It's free while this is in testing."),
+      el("button", { type: "button", class: "primary", textContent: "🎪 Rent this stall", on: { click: () => { close(); rent(idx); } } }));
+  }
+
+  // ---------- what the hub furniture does ----------
+  const lines = { read: "You pick up a book and read for a while.", order: "You order something cold. Perfect at this hour.", exhibit: "You stop and take it in." };
+  room.onHubAct = (act, item) => {
+    const def = item.def;
+    if (act === "cafeTable") tableChoice();
+    else if (act === "stall") stallClick(item);
+    else if (act === "studyRoom") go(buildHub("study", item.spec.n));
+    else if (act === "study") { toast("Your study room is quiet. Opening Study."); openPanel("study"); }
+    else if (act === "games") games();
+    else if (act === "noSit") toast(`This character can't sit yet (no sitting animation), so they stand by the ${def.label.toLowerCase()}.`, 3500);
+    else if (act === "portal") { if (!item.through && item.group?.userData?.walkThrough?.()) return; const to = item.spec.to; toast(`Stepping through to ${item.spec.name || OFFICIAL_HUBS.find((h) => h.key === to)?.name || "somewhere new"}…`, 1600); setTimeout(() => (to === "home" ? room.leaveHub() : goHub(to)), 450); }
+    else if (act === "beacon") openNavigator("official");
+    else if (act === "orb") toast(`💡 ${item.spec.tip || "The orb hums softly."}`, 4500);
+    else if (act === "board") leaderboard();
+    else if (act === "blossom") { room.playEmote("look around"); toast("🌸 Petals drift down around you. Someone nearby says it's their favourite spot.", 3200); }
+    else if (act === "pads") { room.playEmote("jump"); toast("The panels bob as you wave at them. They're too high to climb, but they wave back.", 3000); }
+    else if (act === "snack") { room.playEmote("celebrate"); toast(`You grab something from ${item.spec.name || "the kiosk"}. ${["Fizzy cloud soda!", "A warm star bun.", "Iced berry tea."][Math.floor(Math.random() * 3)]}`, 3000); }
+    else if (act === "view") toast("Through the scope: the cloud sea, far towers, and a balloon drifting past the spire.", 3600);
+    else if (act === "dance") { room.playEmote("dance"); toast("You hop up on the stage and dance. A few people start clapping.", 3000); }
+    else if (act === "photo") { room.playEmote("celebrate"); toast("📸 Snap! A photo in the blossom ring.", 2600); }
+    else if (act === "screen") toast("The holo screens loop welcome messages, events, and whoever's just arrived.", 3200);
+    else toast(item.spec.info || def.info || lines[act] || def.label, 3000);
+  };
+
+  function leaderboard() {
+    const medal = ["🥇", "🥈", "🥉"], rows = boardRows().slice(0, 20);
+    dialog("🏆 Hall of Fame: top Lumen", el("p", { class: "note" }, boardIsLive() ? "The richest players across every server, live." : "A preview ranking until the servers report in. Earn Lumen to climb it."),
+      el("ol", { class: "nav-list" }, ...rows.map((r, i) => el("li", { textContent: `${medal[i] || `#${i + 1}`}  ${r.name}${r.server ? ` · ${r.server}` : ""} — ${fmtV(r.vcash)} Lumen` }))));
+  }
+
+  room.onBeaconArrival = (name) => { if (room.hub?.key === "main" && name) toast(`✨ ${name} just arrived through the beacon`, 2400); };
+
+  // ---------- going places ----------
+  async function go(hub) {
+    hub = await hub;                                                   // a hub still being built (its code loads the first time)
+    if (!hub) return;
+    if (!room.hub) saveHome?.();
+    $("hubChat").hidden = true;
+    room.enterHub(hub);
+  }
+  const goHub = (key) => go(buildHub(key, key === "stalls" ? db.stalls : undefined));
+  const visit = (r) => go({ key: "visit", name: r.name, layout: r.layout || THEMES[r.theme]?.layout, spawn: [0.4, 2.4], fog: [0x150e1c, 12, 26], people: r.owner ? [{ id: `owner-${r.id}`, name: r.owner, color: "#e8a15f", x: -1, z: 1, roam: true }] : [] });
+  room.onHubChange = (hub) => {
+    document.body.classList.toggle("in-hub", !!hub);
+    $("hubPill").hidden = !hub;
+    if (hub) $("hubPillName").textContent = hub.name;
+    room._worldLayer = hubEntered(room, hub);                       // what you've changed here comes back
+    $("hubEdit").hidden = !room._worldLayer;
+    $("hubLeave").textContent = hub?.parent ? "‹ Back" : "🏠 Go home";
+    hooks.hubChanged?.(hub);
+  };
+  $("hubEdit").addEventListener("click", () => { $("hubChat").hidden = true; openHubEditor(room, api); });
+  $("hubLeave").addEventListener("click", () => {
+    $("hubChat").hidden = true;
+    if (room.hub?.parent) goHub(room.hub.parent); else room.leaveHub();
+  });
+  const closeNavigator = () => { $("panel-socialize").hidden = true; };
+
+  // ---------- the navigator ----------
+  function heart(id) {
+    const on = db.favorites.includes(id);
+    return el("button", { type: "button", class: `nav-heart ${on ? "on" : ""}`, title: on ? "Remove from favourites" : "Add to favourites", "aria-pressed": on, "aria-label": "Favourite", textContent: on ? "♥" : "♡",
+      on: { click: (e) => { e.stopPropagation(); db.favorites = on ? db.favorites.filter((x) => x !== id) : [...db.favorites, id]; save(); renderNav(); } } });
+  }
+  function row({ id, icon, name, desc, count, owner, tag, action, actionLabel = "Go", extra }) {
+    return el("li", { class: "nav-row", on: { dblclick: action } },
+      el("span", { class: "nav-count", title: "People here" }, `👤 ${count ?? 0}`),
+      el("span", { class: "nav-icon" }, icon || "🚪"),
+      el("span", { class: "nav-text" }, el("b", {}, name), tag ? el("em", {}, tag) : null, el("small", {}, owner ? `by ${owner}` : desc || "")),
+      el("div", { class: "nav-card" }, el("b", {}, name), owner ? el("small", {}, `Hosted by ${owner}`) : null, el("p", {}, desc || "")),
+      extra || null,
+      id ? heart(id) : null,
+      el("button", { type: "button", class: "primary small", textContent: actionLabel, on: { click: action } }));
+  }
+  const sampleRows = (list) => list.map((r) => row({ id: r.id, icon: "🏠", name: r.name, desc: r.desc, owner: r.owner, count: r.visitors, tag: "sample", action: () => { closeNavigator(); visit(r); } }));
+  const officialRows = (list) => list.map((h) => row({ id: h.key, icon: h.icon, name: h.name, desc: h.desc, count: h.visitors, tag: "official", action: () => { closeNavigator(); goHub(h.key); } }));
+  const myRoomRows = (list) => list.map((r) => row({ id: r.id, icon: r.hosted ? "📡" : "🏠", name: r.name, desc: r.desc, count: r.hosted ? r.visitors || 0 : 0, tag: r.hosted ? "hosting" : "", actionLabel: "Visit", action: () => { closeNavigator(); visit(r); },
+    extra: el("span", { class: "nav-extra" },
+      el("button", { type: "button", class: "ghost small", textContent: r.hosted ? "Stop hosting" : "Host", on: { click: () => { r.hosted = !r.hosted; save(); renderNav(); toast(r.hosted ? `${r.name} is marked as open. To have someone over, invite them from Friends (👥).` : `${r.name} is closed.`, 3000); } } }),
+      el("button", { type: "button", class: "ghost small", title: "Remove", textContent: "🗑", on: { click: () => { db.myRooms = db.myRooms.filter((x) => x.id !== r.id); save(); renderNav(); } } })) }));
+  const heading = (t, note) => el("div", { class: "nav-head" }, el("h3", {}, t), note ? el("small", {}, note) : null);
+
+  function renderEvents(body) {
+    const name = el("input", { type: "text", placeholder: "Event name", maxLength: 50, "aria-label": "Event name", required: true });
+    const date = el("input", { type: "datetime-local", "aria-label": "When", required: true });
+    const place = el("select", { "aria-label": "Where" }, ...OFFICIAL_HUBS.map((h) => el("option", { value: h.key, textContent: `${h.icon} ${h.name}` })));
+    const desc = el("input", { type: "text", placeholder: "What's happening?", maxLength: 140, "aria-label": "Description" });
+    const form = el("form", { class: "nav-form", on: { submit: (e) => {
+      e.preventDefault();
+      db.events.push({ id: newId(), name: name.value.trim(), when: new Date(date.value).getTime(), place: place.value, desc: desc.value.trim() });
+      save(); notify(`Event created: ${name.value.trim()}`, { tab: "events" }); renderNav();
+    } } }, el("b", {}, "Create an event (admin)"), name, date, place, desc, el("button", { type: "submit", class: "primary small", textContent: "Create event room" }));
+    const now = Date.now(), up = db.events.filter((e) => e.when > now - 3 * 3600e3).sort((a, b) => a.when - b.when);
+    const list = el("ul", { class: "nav-list" }, ...up.map((e) => {
+      const hub = OFFICIAL_HUBS.find((h) => h.key === e.place);
+      return row({ id: e.id, icon: "🎉", name: e.name, desc: `${when(e.when)} at ${hub?.name || "?"}. ${e.desc}`, count: 0, tag: e.when > now ? when(e.when) : "on now", actionLabel: "Enter", action: () => { closeNavigator(); goHub(e.place); },
+        extra: el("button", { type: "button", class: "ghost small", title: "Delete event", textContent: "🗑", on: { click: () => { db.events = db.events.filter((x) => x.id !== e.id); save(); renderNav(); } } }) });
+    }));
+    body.append(heading("Future events"), up.length ? list : el("p", { class: "note" }, "No events planned yet."), form);
+  }
+  function renderMe(body) {
+    const fav = [...officialRows(OFFICIAL_HUBS.filter((h) => db.favorites.includes(h.key))), ...sampleRows(SAMPLE_ROOMS.filter((r) => db.favorites.includes(r.id)))];
+    const stall = myStall();
+    body.append(
+      el("div", { class: "nav-actions" }, el("button", { type: "button", class: "primary", textContent: "📸 Save my room to host", on: { click: () => {
+        db.myRooms.push({ id: newId(), name: `My room ${db.myRooms.length + 1}`, desc: "A copy of my room as it is now.", layout: room.layout(), hosted: true, visitors: 0 });
+        save(); renderNav(); toast("Saved. It's in your hosted rooms now.", 2500);
+      } } })),
+      heading("My rooms and hosted rooms"), db.myRooms.length ? el("ul", { class: "nav-list" }, ...myRoomRows(db.myRooms)) : el("p", { class: "note" }, "Nothing hosted yet. Save your room to host it."),
+      stall ? el("div", {}, heading("My stall"), el("ul", { class: "nav-list" }, row({ icon: "🎪", name: stall[1].name, desc: stall[1].tagline, count: 0, actionLabel: "Go", action: () => { closeNavigator(); goToMyStall(); } }), row({ icon: "✏️", name: "Set up my stall", desc: "Name, banner colour and what's on show", count: 0, actionLabel: "Edit", action: () => { closeNavigator(); goToMyStall(true); } }))) : el("div", {}, heading("My stall"), el("ul", { class: "nav-list" }, row({ icon: "🎪", name: "Rent a stall", desc: "Pick any empty stall in the Community Stalls hall", count: 0, actionLabel: "Go", action: () => { closeNavigator(); goHub("stalls"); } }))),
+      heading("Favourites"), fav.length ? el("ul", { class: "nav-list" }, ...fav) : el("p", { class: "note" }, "Tap a ♡ on any room to keep it here."));
+  }
+  function renderSearch(body) {
+    const results = el("ul", { class: "nav-list" });
+    const paint = () => {
+      const q = query.trim().toLowerCase();
+      const hit = (...t) => !q || t.some((x) => String(x || "").toLowerCase().includes(q));
+      const rows = [...sampleRows(SAMPLE_ROOMS.filter((r) => hit(r.name, r.owner, r.desc)))];
+      if (q) rows.push(...officialRows(OFFICIAL_HUBS.filter((h) => hit(h.name, h.desc))));
+      results.replaceChildren(...(rows.length ? rows : [el("li", { class: "note" }, "No rooms found.")]));
+    };
+    const input = el("input", { type: "search", placeholder: "Search rooms or the people hosting them…", value: query, "aria-label": "Search rooms", on: { input: (e) => { query = e.target.value; paint(); } } });
+    body.append(input, results);
+    paint(); input.focus();
+  }
+  function renderNav() {
+    const panel = $("panel-socialize");
+    if (panel.hidden) return;
+    for (const b of panel.querySelectorAll(".nav-tabs button")) b.setAttribute("aria-selected", b.dataset.tab === tab);
+    const body = $("navBody"); body.replaceChildren();
+    if (tab === "official") body.append(
+      el("div", { class: "nav-staff" }, el("span", { textContent: "⭐" }), el("div", {}, el("b", {}, "Recommended by staff"), el("small", {}, "Central Park is the main hub. Walk up to anyone and say hello.")), el("button", { type: "button", class: "primary small", textContent: "Go", on: { click: () => { closeNavigator(); goHub("park"); } } })),
+      heading("Official rooms", "visitor counts and people are samples for now"), el("ul", { class: "nav-list" }, ...officialRows(OFFICIAL_HUBS)));
+    else if (tab === "rooms") body.append(heading("Rooms other people are hosting", "sample rooms. To visit a real person, enter their code in Friends (👥)"), el("ul", { class: "nav-list" }, ...sampleRows(SAMPLE_ROOMS)));
+    else if (tab === "me") renderMe(body);
+    else if (tab === "events") renderEvents(body);
+    else renderSearch(body);
+  }
+  function openNavigator(which) {
+    if (which) tab = which;
+    if ($("panel-socialize").hidden && canOpen()) openPanel("socialize"); else renderNav();
+  }
+  for (const b of document.querySelectorAll("#panel-socialize .nav-tabs button")) b.addEventListener("click", () => { tab = b.dataset.tab; renderNav(); });
+
+  // ---------- start ----------
+  (async () => {
+    const saved = await api?.social_load?.().catch?.(() => null);
+    if (saved && typeof saved === "object") db = { ...db, ...saved };
+    if (!db.friends.some((f) => f.id === TEST_FRIEND.id)) db.friends.unshift(TEST_FRIEND);
+    if (db.friendHere && friend(db.friendHere)) showFriend(friend(db.friendHere));
+    renderNotes(); renderMessagesBadge();
+    hooks.ready?.();
+  })();
+
+  return { load: renderNav, goHub, openThread, go, notify, say, friend, dialog, save, renderMessages, sendHome, TEST_FRIEND, hooks, choices, data: () => db };
+}

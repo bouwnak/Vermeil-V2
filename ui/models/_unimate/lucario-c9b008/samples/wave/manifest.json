@@ -1,0 +1,64 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\lucario-c9b008\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\lucario-c9b008\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\lucario-c9b008\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "Waist_03",
+        "Spine1_032",
+        "Hips_04",
+        "Spine2_033",
+        "LThigh_07",
+        "RThigh_015",
+        "Neck_046",
+        "RShoulder_078",
+        "LShoulder_040",
+        "LLeg_08",
+        "RLeg_016",
+        "Head_047",
+        "RArm_079",
+        "LArm_041",
+        "LFoot_09",
+        "RFoot_017",
+        "LEar1_051",
+        "REar1_031",
+        "RForeArm_080",
+        "LForeArm_042",
+        "LToe1_011",
+        "RToe1_019",
+        "LEar2_052",
+        "REar2_064",
+        "RHand_081",
+        "LHand_043",
+        "LToe2_013",
+        "RToe2_021"
+      ],
+      "frame_digest": "988be9439d6df93b8664e8a6dd1894e6c44b7d10"
+    }
+  },
+  "samples": {
+    "m-an_object_stands_firmly_in_place_and_waves_hello-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_stands_firmly_in_place_and_waves_hello",
+      "prompt": "An object stands firmly in place and waves hello with its right hand raised, its left arm relaxed at its side.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "988be9439d6df93b8664e8a6dd1894e6c44b7d10"
+    }
+  }
+}

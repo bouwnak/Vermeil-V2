@@ -1,0 +1,64 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\bewear-759268\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "Waist_03",
+        "Spine_04",
+        "Hips_027",
+        "Head_05",
+        "LShoulder_016",
+        "RShoulder_022",
+        "LThigh_028",
+        "RThigh_032",
+        "LEarA_010",
+        "REarA_013",
+        "LArm_017",
+        "RArm_023",
+        "LLeg_029",
+        "RLeg_033",
+        "LEarB_011",
+        "LEarC_012",
+        "REarB_014",
+        "REarC_015",
+        "LForeArm_018",
+        "RForeArm_00",
+        "LFoot_030",
+        "RFoot_034",
+        "LForeArmSub_020",
+        "LHand_019",
+        "RForeArmSub_025",
+        "RHand_024",
+        "LToe_031",
+        "RToe_035"
+      ],
+      "frame_digest": "5925e85fd47e31f2200da325ca0de6400c491135"
+    }
+  },
+  "samples": {
+    "m-an_object_walks_forward_at_a_steady_pace-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_walks_forward_at_a_steady_pace",
+      "prompt": "An object walks forward at a steady pace, swinging its arms naturally.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "5925e85fd47e31f2200da325ca0de6400c491135"
+    }
+  }
+}

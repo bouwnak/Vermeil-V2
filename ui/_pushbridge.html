@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>push bridge</title>
+<p id="s">bridge ready</p>
+<script>
+// hands staged files (ui/_push/...) to the GitHub upload page that opened this window, as raw bytes
+window.addEventListener("message", async (e) => {
+  if (!/^https:\/\/github\.com$/.test(e.origin) || !e.data?.want) return;
+  const out = [];
+  for (const p of e.data.want) { const r = await fetch("/_push/" + p.split("/").map(encodeURIComponent).join("/"), { cache: "no-store" }); out.push({ path: p, ok: r.ok, buf: r.ok ? await r.arrayBuffer() : null }); }
+  e.source.postMessage({ files: out }, e.origin, out.filter((f) => f.buf).map((f) => f.buf));
+  document.getElementById("s").textContent = "sent " + out.length;
+});
+if (window.opener) window.opener.postMessage({ bridge: "ready" }, "https://github.com");
+</script>

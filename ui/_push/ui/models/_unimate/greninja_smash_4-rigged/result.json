@@ -1,0 +1,14 @@
+[
+ {
+  "clip": "idle",
+  "path": "ui\\models\\_unimate\\greninja_smash_4-rigged\\idle.glb"
+ },
+ {
+  "clip": "walk",
+  "path": "ui\\models\\_unimate\\greninja_smash_4-rigged\\walk.glb"
+ },
+ {
+  "clip": "wave",
+  "path": "ui\\models\\_unimate\\greninja_smash_4-rigged\\wave.glb"
+ }
+]

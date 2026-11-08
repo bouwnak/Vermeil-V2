@@ -1,0 +1,17 @@
+[
+ {
+  "clip": "idle"
+ },
+ {
+  "clip": "walk"
+ },
+ {
+  "clip": "wave"
+ },
+ {
+  "clip": "fly"
+ },
+ {
+  "clip": "float"
+ }
+]

@@ -1,0 +1,843 @@
+// parkhub.js - Central Park: a sunken fountain plaza ringed by a raised terrace, rolling hills beyond, a spring high on the
+// north hill whose stream tumbles down in little cascades, under a bridge and into a lily pond. In the middle of the fountain
+// stands a giant hologram of whoever has the most Lumen right now, across every server.
+// Like the Main Hub everything is drawn here (no model files), merged per material; the pack's trees and rocks are added
+// round it by hubdecor.js at the spots this file hands over.
+import * as THREE from "three";
+import { Kit, canvasTex, mainMats, MAIN_FX } from "./mainhub.js";
+import { boardRows, boardVersion, fmtV, fitText } from "./hubboard.js";
+
+const TAU = Math.PI * 2;
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const seeded = (s) => () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const faceTo = (x, z, cx, cz) => Math.atan2(cx - x, cz - z);
+
+// ---------------------------------------------------------------- the layout (local: metres from the fountain)
+const CX = 0, CZ = 24;
+const PLAZA = 19, TER = 1.6, PROM = [23, 27.5], FLAT = 32;
+const STAIRS = { half: 3.6, r0: 15.4, r1: 19, n: 8 };
+const BASIN = { r: 10.4, top: 0.78, water: 0.5 };
+const DIRS = [0, Math.PI / 2, Math.PI, -Math.PI / 2];               // stairs and avenues: direction (sin a, cos a)
+// the hills: the spring's north hill, a picnic hill, rises everywhere round the edge so the land is never one level
+const HILLS = [[-34, -66, 7.4, 24], [64, 50, 4.6, 16], [-14, 76, 3.2, 15], [98, 4, 5.2, 14], [36, -88, 6, 16], [-92, -54, 6.5, 17], [-90, 72, 5.5, 16],
+  [84, 92, 4.6, 15], [94, -76, 5.2, 15], [-6, 106, 2.6, 12], [-70, 100, 4, 14], [70, -102, 3.5, 14], [-104, 12, 3.2, 12], [40, 104, 3, 12]];
+const TEA = { x: 62, z: -34, a: 8.3, s: 18, step: 0.85 };           // the terraced tea hill: nine stone-walled tiers, a pavilion on top
+const RING_R = 102, EDGE_R = 109;                                    // the ring walk round the park; past EDGE_R nobody can go
+const LOOK = { x: -34, z: -66, r: 6 };                               // the lookout on the north hill
+const POND = { x: -56, z: 38, r: 13 };
+const STREAM_PTS = [[-29, -57], [-37, -49], [-46, -42], [-55, -31], [-62, -17], [-65, -3], [-64, 10], [-61, 21], [-58, 30]];
+const AVENUE_END = [104, 104, 102, 104];                              // how far each avenue runs (S, E, N, W)
+const TRAIL = [[0, -48], [-7, -55], [-16, -61], [-24, -65], [-28.4, -66]];
+const SIDEWALK = [[-47, 4], [-46, 12], [-46.5, 19], [-48.2, 25.6]];  // from the west avenue down to the jetty
+
+const teaRaw = (lx, lz) => TEA.a * Math.exp(-((lx - TEA.x) ** 2 + (lz - TEA.z) ** 2) / (TEA.s * TEA.s));
+function teaT(lx, lz) { const h = teaRaw(lx, lz), k = h / TEA.step, f = k - Math.floor(k); return TEA.step * (Math.floor(k) + smooth(0.93, 1, f)); }   // a sharp riser: each tier's stone wall stands in it
+/** the radius on the tea hill where its raw height is h */
+const teaR = (h) => TEA.s * Math.sqrt(Math.max(0, Math.log(TEA.a / h)));
+function hills(lx, lz) {
+  let h = teaT(lx, lz);
+  for (const [hx, hz, a, s] of HILLS) h += a * Math.exp(-((lx - hx) ** 2 + (lz - hz) ** 2) / (s * s));
+  return h + 0.45 * Math.sin(lx * 0.06 + 1.3) * Math.sin(lz * 0.05 - 0.7) + 0.22 * Math.sin(lx * 0.13 - lz * 0.11);
+}
+/** the land before the water carves it */
+function baseT(lx, lz) {
+  const r = Math.hypot(lx, lz), sq = Math.max(Math.abs(lx), Math.abs(lz)), a = Math.atan2(lz, lx);
+  const rim = (7 + 2.6 * Math.sin(a * 5 + 1) + 1.6 * Math.sin(a * 11 - 0.4) + 0.8 * Math.sin(a * 23)) * smooth(EDGE_R - 4, EDGE_R + 22, r);   // a wooded bank all round the edge
+  return (TER + hills(lx, lz) * smooth(FLAT, FLAT + 16, r) + rim) * (1 - smooth(128, 140, sq));
+}
+const pondR = (a) => POND.r + 1.3 * Math.sin(3 * a + 0.4) + 0.7 * Math.sin(5 * a + 1.1);
+
+// the stream: a dense line of samples, each with its water level and half-width
+const STREAM = (() => {
+  const curve = new THREE.CatmullRomCurve3(STREAM_PTS.map(([x, z]) => V(x, 0, z)), false, "centripetal");
+  const N = 320, pts = curve.getSpacedPoints(N), x = [], z = [], raw = [], hw = [];
+  for (let i = 0; i <= N; i++) { x.push(pts[i].x); z.push(pts[i].z); }
+  const inPond = (i) => Math.hypot(x[i] - POND.x, z[i] - POND.z) < pondR(Math.atan2(z[i] - POND.z, x[i] - POND.x)) - 0.5;
+  let first = N; for (let i = 0; i <= N; i++) if (inPond(i)) { first = i; break; }
+  for (let i = 0; i <= N; i++) {
+    const t0 = baseT(x[i], z[i]);
+    raw.push(i ? Math.min(raw[i - 1] - 0.002, t0 - 0.38) : t0 - 0.3);
+    hw.push(1.3 + 1.3 * (i / N));
+  }
+  const P = Math.min(raw[Math.min(first, N)], baseT(POND.x, POND.z) - 0.45);
+  const step = 0.62, level = raw.map((l, i) => {
+    if (i >= first) return P;
+    const d = Math.max(0, l - P), k = d / step, f = k - Math.floor(k);
+    return P + step * (Math.floor(k) + smooth(0.78, 1, f));             // flat pools, then a short drop: the cascades
+  });
+  const len = [0]; for (let i = 1; i <= N; i++) len.push(len[i - 1] + Math.hypot(x[i] - x[i - 1], z[i] - z[i - 1]));
+  const box = { x0: Math.min(...x) - 9, x1: Math.max(...x) + 9, z0: Math.min(...z) - 9, z1: Math.max(...z) + 9 };
+  return { N, x, z, level, hw, len, P, box, first };
+})();
+const POND_Y = STREAM.P;
+function nearStream(lx, lz) {
+  const S = STREAM, b = S.box;
+  if (lx < b.x0 || lx > b.x1 || lz < b.z0 || lz > b.z1) return null;
+  let best = 1e9, bi = 0;
+  for (let i = 0; i <= S.N; i += 2) { const d = (S.x[i] - lx) ** 2 + (S.z[i] - lz) ** 2; if (d < best) { best = d; bi = i; } }
+  for (let i = Math.max(0, bi - 2); i <= Math.min(S.N, bi + 2); i++) { const d = (S.x[i] - lx) ** 2 + (S.z[i] - lz) ** 2; if (d < best) { best = d; bi = i; } }
+  return { d: Math.sqrt(best), i: bi };
+}
+
+// the decks: the bridge over the stream on the west avenue, and the jetty out into the pond
+const DECKS = (() => {
+  let bi = 0, bd = 1e9;
+  for (let i = 0; i <= STREAM.N; i++) if (Math.abs(STREAM.z[i]) < bd) { bd = Math.abs(STREAM.z[i]); bi = i; }
+  const bx = STREAM.x[bi], half = STREAM.hw[bi] + 3.2;
+  const shore = Math.atan2(25.6 - POND.z, -48.2 - POND.x), sr = pondR(shore);
+  const jx = POND.x + Math.cos(shore) * (sr - 3), jz = POND.z + Math.sin(shore) * (sr - 3);
+  return [
+    { kind: "bridge", x: bx, z: 0, ang: Math.PI / 2, len: half * 2, w: 5, rise: 0.75, level: STREAM.level[bi] },
+    { kind: "jetty", x: jx, z: jz, ang: Math.atan2(Math.cos(shore), Math.sin(shore)) + Math.PI, len: 9, w: 3, rise: 0, level: POND_Y },
+  ];
+})();
+/** where on a deck: u along it (-0.5..0.5), v across; null when off it */
+function onDeck(d, lx, lz) {
+  const s = Math.sin(d.ang), c = Math.cos(d.ang), dx = lx - d.x, dz = lz - d.z;
+  const u = (dx * s + dz * c) / d.len, v = dx * c - dz * s;
+  return Math.abs(u) <= 0.5 && Math.abs(v) <= d.w / 2 ? { u, v } : null;
+}
+function deckY(d, u) {
+  if (d.kind === "jetty") return d.level + 0.42;
+  if (d.ends == null) {                                                // the bridge's ends sit on the banks
+    const s = Math.sin(d.ang), c = Math.cos(d.ang);
+    d.ends = [-0.5, 0.5].map((k) => carved(d.x + s * d.len * k, d.z + c * d.len * k));
+  }
+  return lerp(d.ends[0], d.ends[1], u + 0.5) + d.rise * Math.cos(Math.PI * u);
+}
+
+const LOOK_Y = baseT(LOOK.x, LOOK.z) + 0.35;
+
+// ---------------------------------------------------------------- the places people stop and talk (local metres)
+const PLACES = {
+  amphi: { x: 26, z: -70, r: 15 }, wish: { x: 28, z: 60, r: 9 }, picnic: { x: 64, z: 50, r: 13 }, cafe: { x: 46, z: 17, r: 7.5 },
+  hammock: { x: -56, z: 72, r: 9 }, fire: { x: -78, z: -34, r: 7.5 }, zen: { x: 84, z: 30, r: 8 }, dome: { x: 28, z: 86, r: 8.5 },
+};
+const CIRCLES = [{ x: -30, z: 50, r: 6, kind: 0 }, { x: -38, z: -14, r: 6, kind: 1 }, { x: 22, z: -40, r: 6, kind: 2 }, { x: 34, z: 36, r: 6, kind: 3 }];
+const PADS = [...Object.values(PLACES), ...CIRCLES];
+PLACES.amphi.face = Math.atan2(PLACES.amphi.x, PLACES.amphi.z);     // the seats rise away from the plaza; the audience looks back toward it
+PLACES.amphi.span = 1.25;
+PLACES.dome.wall = 7; PLACES.dome.door = -Math.PI / 2;                // the glasshouse: its glass wall, and its door toward the path in from the west
+const padY = (p) => (p.y ??= baseT(p.x, p.z) + 0.04);
+const PERGOLA = [[-8, 60], [-36, 86]];
+// the walks between them all: [points, width]
+const PATHS = [
+  [[[40, -2.6], [45, -11], [50, -21], [55, -29], [59.5, -33]], 2.6],                  // up the tea hill
+  [[[65, -38], [71, -46], [77, -55], [82, -61.5]], 2.4],                               // and down its far side to the ring
+  [[[2.6, -56], [12, -59], [19, -62], [23.6, -64.4]], 3],                              // the amphitheatre
+  [[[2.6, 58], [12, 59.4], [19.4, 60]], 3], [[[36.6, 58.6], [46, 56], [54, 52.5]], 2.6], // the wish tree, on to the picnic hill
+  [[[46, 2.6], [46, 10]], 3],                                                          // the cafe terrace
+  [[[2.6, 36], [16, 36.4], [28.4, 36]], 2.6], [[[38.6, 32.2], [43, 25.5]], 2.2],         // a quiet circle, and on to the cafe
+  [[[-2.6, 50], [-14, 50.3], [-24.4, 50]], 2.6],                                      // the circle by the pond
+  [[[-2.6, 57.5], [-8, 60], [-22, 73], [-36, 86], [-39.4, 94.1]], 3],                 // through the pergola to the ring
+  [[[-36, 86], [-45, 80], [-49.5, 76]], 2.2],                                          // the hammock grove
+  [[[-82, -2.6], [-81, -14], [-79.4, -26.6]], 2.6],                                     // the fire circle
+  [[[84, 2.6], [84, 14], [84, 22.2]], 2.6],                                             // the zen garden
+  [[[2.6, 86], [12, 86.2], [19.6, 86]], 2.6],                                           // the glasshouse
+  [[[-38, -2.6], [-38, -8.2]], 2.4], [[[2.6, -40], [16.2, -40]], 2.4],                 // two more circles
+  [[[-38, -71], [-46, -82], [-55, -86.6]], 2.2],                                        // from the lookout over to the ring
+];
+const segDist = (x, z, [ax, az], [bx, bz]) => { const dx = bx - ax, dz = bz - az, k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1))); return Math.hypot(x - ax - dx * k, z - az - dz * k); };
+const inPlace = (x, z, pad = 0) => PADS.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + pad) || segDist(x, z, ...PERGOLA) < 2.8 + pad || Math.hypot(x - TEA.x, z - TEA.z) < 5.5 + pad;
+let GAZ_Y = null;
+const gazY = () => (GAZ_Y ??= baseT(TEA.x, TEA.z));
+/** the amphitheatre's seat rows: their height there, or null */
+function amphiAt(lx, lz) {
+  const A = PLACES.amphi, dx = lx - A.x, dz = lz - A.z, d = Math.hypot(dx, dz);
+  if (d < 4.6) return padY(A) + 0.6;                                  // the stage
+  if (d < 4.7) return padY(A) + 0.6;                                   // up on the stage
+  if (d < 7 || d > 14.5) return null;
+  const a = Math.atan2(dx, dz), da = Math.atan2(Math.sin(a - A.face), Math.cos(a - A.face));
+  if (Math.abs(da) > A.span + 0.03) return null;
+  if (d > 14 || Math.abs(da) > A.span) return padY(A) + 4.2;          // the back and end walls: too tall to climb
+  return padY(A) + (Math.min(4, Math.floor((d - 7) / 1.4)) + 1) * 0.42;
+}
+/** the ground outside the plaza, with the stream bed, the pond and the lookout's level top cut into it */
+function carved(lx, lz) {
+  let h = baseT(lx, lz);
+  const s = nearStream(lx, lz);
+  if (s) {
+    const L = STREAM.level[s.i], hw = STREAM.hw[s.i];
+    if (s.d < hw) h = L - 0.55 + 0.42 * smooth(0, hw, s.d);
+    else if (s.d < hw + 5) h = lerp(L + 0.22, h, smooth(hw, hw + 5, s.d));
+  }
+  const dp = Math.hypot(lx - POND.x, lz - POND.z), rp = pondR(Math.atan2(lz - POND.z, lx - POND.x));
+  if (dp < rp) h = Math.min(h, POND_Y - 1.1 + 0.9 * smooth(rp - 5, rp, dp));
+  else if (dp < rp + 6) { const bank = lerp(POND_Y + 0.25, h, smooth(rp, rp + 6, dp)); h = s && s.d < STREAM.hw[s.i] + 1 ? Math.min(h, bank) : bank; }
+  const dl = Math.hypot(lx - LOOK.x, lz - LOOK.z);
+  if (dl < LOOK.r + 3) h = lerp(LOOK_Y - 0.05, h, smooth(LOOK.r - 0.5, LOOK.r + 3, dl));
+  for (const p of PADS) { const d = Math.hypot(lx - p.x, lz - p.z); if (d < p.r + 5) h = lerp(padY(p), h, smooth(p.r + 0.4, p.r + 5, d)); }   // the places sit level
+  return h;
+}
+
+/** how high the floor is at world x, z */
+export function parkHeightAt(x, z) {
+  const lx = x - CX, lz = z - CZ, r = Math.hypot(lx, lz);
+  if (r < PLAZA) {
+    for (const a of DIRS) {
+      const along = lx * Math.sin(a) + lz * Math.cos(a), lat = lx * Math.cos(a) - lz * Math.sin(a);
+      if (along > STAIRS.r0 && Math.abs(lat) < STAIRS.half) { const k = Math.floor((along - STAIRS.r0) / ((STAIRS.r1 - STAIRS.r0) / STAIRS.n)); return Math.min(TER, (k + 1) * (TER / STAIRS.n)); }
+    }
+    return 0;
+  }
+  for (const d of DECKS) { const o = onDeck(d, lx, lz); if (o) return deckY(d, o.u); }
+  if (Math.hypot(lx - LOOK.x, lz - LOOK.z) < LOOK.r) return LOOK_Y;
+  if (Math.hypot(lx - TEA.x, lz - TEA.z) < 4.4) return gazY() + 0.32;         // the pavilion's floor
+  const am = amphiAt(lx, lz); if (am != null) return am;
+  return carved(lx, lz);
+}
+/** where you can walk: not into the fountain, the stream (except over the bridge) or the pond (except out along the jetty) */
+export function parkWalkable(x, z) {
+  const lx = x - CX, lz = z - CZ;
+  if (Math.hypot(lx, lz) > EDGE_R) return false;                            // the invisible edge: the woods beyond are only to look at
+  if (Math.hypot(lx, lz) < BASIN.r + 0.3) return false;
+  for (const d of DECKS) if (onDeck(d, lx, lz)) return true;
+  const s = nearStream(lx, lz);
+  if (s && s.d < STREAM.hw[s.i] + 0.1) return false;
+  const dp = Math.hypot(lx - POND.x, lz - POND.z);
+  if (dp < pondR(Math.atan2(lz - POND.z, lx - POND.x)) - 0.2) return false;
+  const F = PLACES.fire, Z = PLACES.zen, D = PLACES.dome;
+  if (Math.hypot(lx - F.x, lz - F.z) < 1.5) return false;                   // into the fire pit
+  if (Math.hypot(lx - Z.x, lz - Z.z) < 7.2) return false;                   // onto the raked gravel
+  const dd = Math.hypot(lx - D.x, lz - D.z);
+  if (dd > D.wall - 0.35 && dd < D.wall + 0.35) {                          // through the glasshouse wall, except at its door
+    const a = Math.atan2(lx - D.x, lz - D.z), da = Math.atan2(Math.sin(a - D.door), Math.cos(a - D.door));
+    if (Math.abs(da) > 0.3) return false;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------- shaders
+const PARK_U = { uTime: { value: 0 }, uFlare: { value: 0 } };
+const NOISE = `float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }`;
+/** moving water: ripples, caustic light, sky in it at a glance, foam where it falls. FLOW: a stream (runs along uv.y) */
+function makeWater(deep, shallow, flow, opacity) {
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide, defines: flow ? { FLOW: 1 } : {},
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uTime: PARK_U.uTime, uDeep: { value: new THREE.Color(deep) }, uShallow: { value: new THREE.Color(shallow) }, uOpacity: { value: opacity } },
+    vertexShader: WATER_V, fragmentShader: WATER_F,
+  });
+  return m;
+}
+const WATER_V = `attribute float aFoam; varying vec2 vUv; varying vec3 vW; varying float vFoam;
+#include <fog_pars_vertex>
+void main(){ vUv = uv; vFoam = aFoam; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
+#include <fog_vertex>
+}`;
+const WATER_F = `uniform float uTime, uOpacity; uniform vec3 uDeep, uShallow; varying vec2 vUv; varying vec3 vW; varying float vFoam;
+${NOISE}
+#include <fog_pars_fragment>
+void main(){
+  vec2 p = vW.xz;
+#ifdef FLOW
+  vec2 q = vec2(vUv.x * 3.0, vUv.y - uTime * (0.9 + vFoam * 2.5));
+  float n1 = noise(q * vec2(2.0, 1.2)), n2 = noise(q * vec2(5.0, 2.6) + 4.0);
+  float edge = smoothstep(0.32, 0.5, abs(vUv.x - 0.5));
+  float foam = clamp(vFoam * smoothstep(0.35, 0.75, n2) * 1.4 + edge * 0.35 * n1, 0.0, 1.0);
+#else
+  float n1 = noise(p * 0.45 + uTime * vec2(0.18, 0.11)), n2 = noise(p * 1.6 - uTime * vec2(0.3, -0.22));
+  float foam = vFoam * smoothstep(0.45, 0.8, n2);
+#endif
+  float ca = pow(abs(sin((p.x + n1 * 2.5) * 1.9 + uTime * 0.9) * sin((p.y + n2 * 2.5) * 1.7 - uTime * 0.7)), 4.0);
+  vec3 V = normalize(cameraPosition - vW); float fr = pow(clamp(1.0 - V.y, 0.0, 1.0), 3.0);
+  vec3 c = mix(uDeep, uShallow, 0.35 + 0.45 * n1) + vec3(0.75, 0.95, 1.0) * ca * 0.22;
+  c = mix(c, vec3(0.78, 0.9, 0.97), fr * 0.65);
+  c += vec3(1.0) * pow(n2, 14.0) * 2.4;
+  c = mix(c, vec3(0.96, 0.99, 1.0), foam);
+  gl_FragColor = vec4(c, mix(uOpacity, 1.0, foam * 0.8));
+  #include <colorspace_fragment>
+  #include <fog_fragment>
+}`;
+/** a sheet of water falling over a lip: streaks running down (uv.y 1 at the top) */
+function curtainMat() {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uTime: PARK_U.uTime },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform float uTime; varying vec2 vUv;
+${NOISE}
+void main(){ float n = noise(vec2(vUv.x * 160.0, vUv.y * 3.0 + uTime * 2.8)), m = noise(vec2(vUv.x * 60.0, vUv.y * 1.5 + uTime * 1.9));
+  float a = (0.35 + 0.5 * n * m) * smoothstep(0.0, 0.25, vUv.y + 0.1); vec3 c = mix(vec3(0.55, 0.85, 0.92), vec3(1.0), smoothstep(0.4, 0.9, n) * 0.8 + (1.0 - vUv.y) * 0.3);
+  gl_FragColor = vec4(c, a);
+  #include <colorspace_fragment>
+}`,
+  });
+}
+/** the hologram: see-through light, brightest at its edges (gold for number one), scanlines, a bright band sweeping up it, a glitch now and then */
+function holoMat(uni) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false, uniforms: uni,
+    vertexShader: `uniform float uTime, uGlitch; varying vec3 vN, vV, vW;
+void main(){ vec3 p = position; float row = floor(p.y * 36.0 + floor(uTime * 7.0) * 3.0);
+  float g = step(0.965, fract(sin(row * 91.7) * 437.5)) * uGlitch; p.x += g * 0.035 * sin(uTime * 61.0 + row);
+  vec4 w = modelMatrix * vec4(p, 1.0); vW = w.xyz; vN = mat3(modelMatrix) * normal; vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform float uTime, uBase, uHeight, uFlick; uniform vec3 uCore, uRim; varying vec3 vN, vV, vW;
+void main(){ float ln = length(vN); vec3 n = ln > 1e-4 ? vN / ln : vec3(0.0, 1.0, 0.0); float f = pow(clamp(1.0 - abs(dot(n, normalize(vV))), 0.0, 1.0), 2.2);
+  float y = (vW.y - uBase) / uHeight;
+  float scan = 0.72 + 0.28 * sin(vW.y * 26.0 - uTime * 5.0), fine = smoothstep(0.7, 1.0, sin(vW.y * 140.0)) * 0.35;
+  float sd = (fract(uTime * 0.16) * 1.4 - 0.2 - y) / 0.035, sweep = exp(-sd * sd);
+  vec3 c = uCore * (0.16 + 0.5 * f) * (scan + fine) + uRim * pow(f, 1.6) * 2.2 + vec3(1.0, 0.97, 0.9) * sweep * 1.4;
+  c *= uFlick * (0.85 + 0.15 * smoothstep(0.0, 0.06, y));
+  gl_FragColor = vec4(c, 1.0); }`,
+  });
+}
+/** a cone of projected light rising off the pedestal */
+function beamConeMat(color) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false, fog: false,
+    uniforms: { uTime: PARK_U.uTime, uColor: { value: new THREE.Color(color) } },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform float uTime; uniform vec3 uColor; varying vec2 vUv;
+void main(){ float fall = pow(1.0 - vUv.y, 1.8); float lines = 0.5 + 0.5 * sin(vUv.x * 6.2831 * 48.0 + uTime * 0.6); float rise = 0.6 + 0.4 * sin(vUv.y * 30.0 - uTime * 4.0);
+  gl_FragColor = vec4(uColor * (0.5 + 0.5 * lines) * rise, 1.0) * 0.22 * fall; }`,
+  });
+}
+
+// ---------------------------------------------------------------- pictures
+const stoneTex = () => canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = "#e7e1d6"; g.fillRect(0, 0, w, h);
+  const r = seeded(77);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${r() < 0.5 ? "90,80,70" : "255,255,255"},${0.03 + r() * 0.05})`; g.fillRect(r() * w, r() * h, 2, 2); }
+  g.strokeStyle = "rgba(120,108,94,.35)"; g.lineWidth = 3;
+  for (let y = 0; y <= h; y += 128) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 128) % 2 ? 0 : 128; x < w; x += 256) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 128); g.stroke(); } }
+});
+const plazaTex = () => canvasTex(2048, 2048, (g, w) => {
+  const c = w / 2, R = w / 2, k = R / PLAZA;
+  g.fillStyle = "#ece6db"; g.fillRect(0, 0, w, w);
+  const r = seeded(5);
+  for (let i = 0; i < 60000; i++) { g.fillStyle = `rgba(${r() < 0.5 ? "110,96,80" : "255,255,255"},${0.025 + r() * 0.04})`; g.fillRect(r() * w, r() * w, 3, 3); }
+  // rings of pavers, with radial joints, a darker band of inlaid stone and a compass rose under the stairs
+  g.strokeStyle = "rgba(130,116,100,.42)"; g.lineWidth = 3;
+  for (let rr = 11; rr < PLAZA; rr += 1.2) { g.beginPath(); g.arc(c, c, rr * k, 0, TAU); g.stroke(); const n = Math.round(rr * 4); for (let i = 0; i < n; i++) { const a = (i + (Math.round(rr) % 2) * 0.5) / n * TAU, r0 = rr * k, r1 = Math.min(PLAZA, rr + 1.2) * k; g.beginPath(); g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0); g.lineTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1); g.stroke(); } }
+  g.fillStyle = "rgba(160,138,112,.35)"; g.beginPath(); g.arc(c, c, 14.6 * k, 0, TAU); g.arc(c, c, 13.4 * k, 0, TAU, true); g.fill();
+  g.fillStyle = "rgba(150,128,104,.28)";
+  for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, l = i % 4 ? 14 : 18.2; g.beginPath(); g.moveTo(c + Math.cos(a) * 10.8 * k, c + Math.sin(a) * 10.8 * k); g.lineTo(c + Math.cos(a + 0.03) * l * k * 0.8, c + Math.sin(a + 0.03) * l * k * 0.8); g.lineTo(c + Math.cos(a) * l * k, c + Math.sin(a) * l * k); g.lineTo(c + Math.cos(a - 0.03) * l * k * 0.8, c + Math.sin(a - 0.03) * l * k * 0.8); g.closePath(); g.fill(); }
+}, { repeat: null });
+const grassTex = () => canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = "#8a9a6a"; g.fillRect(0, 0, w, h);
+  const r = seeded(9);
+  for (let i = 0; i < 30000; i++) { const l = 55 + r() * 45; g.fillStyle = `rgba(${l * 1.6 | 0},${l * 2.2 | 0},${l * 1.2 | 0},${0.35 + r() * 0.4})`; g.fillRect(r() * w, r() * h, 1.6, 3 + r() * 5); }
+}, { srgb: true });
+const gravelTex = () => canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = "#e3dbcd"; g.fillRect(0, 0, w, h);
+  const r = seeded(31);
+  for (let i = 0; i < 16000; i++) { const l = 170 + r() * 70; g.fillStyle = `rgba(${l},${l - 8},${l - 22},${0.4 + r() * 0.4})`; g.beginPath(); g.arc(r() * w, r() * h, 1 + r() * 2.4, 0, TAU); g.fill(); }
+  g.strokeStyle = "rgba(140,124,104,.25)"; g.lineWidth = 2;
+  for (let y = 0; y < h; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+});
+/** the band round the hologram: the leader's name and Lumen */
+function leaderBand(row) {
+  return canvasTex(2048, 160, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const text = row ? `#1  ${row.name.toUpperCase()}   ✦   ${fmtV(row.vcash)} LUMEN   ✦   TOP OF EVERY SERVER   ✦   ` : "TOP LUMEN   ✦   ";
+    g.font = "900 96px Nunito, sans-serif"; g.textBaseline = "middle";
+    const tw = g.measureText(text).width, n = Math.max(1, Math.round(w / tw)), sx = w / (tw * n);
+    g.save(); g.scale(sx, 1); g.shadowColor = "#ffcf5a"; g.shadowBlur = 22; g.fillStyle = "#fff4d6";
+    for (let i = 0; i < n; i++) g.fillText(text, i * tw, h / 2 + 4);
+    g.restore();
+    g.fillStyle = "rgba(255,215,106,.9)"; g.fillRect(0, 6, w, 5); g.fillRect(0, h - 11, w, 5);
+  }, { repeat: [2, 1] });
+}
+
+// ---------------------------------------------------------------- materials
+let PM = null;
+function pmats() {
+  if (PM) return PM;
+  const M = mainMats(), std = (o) => new THREE.MeshStandardMaterial({ roughness: 0.85, ...o });
+  const stone = stoneTex(); stone.repeat.set(1, 1);
+  const glow = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: o < 1, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
+  PM = {
+    M,
+    terrain: std({ map: grassTex(), vertexColors: true, roughness: 1 }),
+    stone: std({ map: stone, roughness: 0.8 }),
+    white: M.white, metal: M.metal, darkMetal: M.darkMetal, timber: M.timber, led: M.led, line: M.line,
+    plaza: std({ map: plazaTex(), roughness: 0.75 }),
+    path: std({ map: gravelTex(), roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -3 }),
+    edge: std({ color: 0xf7f4ee, emissive: 0xfaf6ee, emissiveIntensity: 0.45, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -5 }),
+    cyanGlow: glow(0x7fefff), goldGlow: glow(0xffd06a), softCyan: glow(0x57d9ff, 0.5),
+    rock: std({ color: 0x9a9286, roughness: 0.95, flatShading: true }),
+    mossRock: std({ color: 0x7c8463, roughness: 1, flatShading: true }),
+    bed: std({ color: 0x5c5243, roughness: 1 }),
+    pad: std({ color: 0x4f8a3a, roughness: 0.8, side: THREE.DoubleSide }),
+    lotus: std({ color: 0xf6c3d6, emissive: 0xf3a0c0, emissiveIntensity: 0.35, roughness: 0.6 }),
+    reed: std({ color: 0x8a9a54, roughness: 1, side: THREE.DoubleSide }),
+    tuft: std({ color: 0x7f9e4c, roughness: 1, side: THREE.DoubleSide }),
+    glass: M.railGlass,
+    pool: makeWater(0x1b7f95, 0x6fd6d8, false, 0.88),
+    pond: makeWater(0x1f5e5a, 0x4fa59a, false, 0.9),
+    stream: makeWater(0x2a7f8a, 0x7fd9d4, true, 0.86),
+    curtain: curtainMat(),
+  };
+  for (const m of Object.values(PM)) if (m?.isMaterial) m.userData.shared = true;
+  return PM;
+}
+const P = (label, make, extra = {}) => ({ label, mount: "floor", hubOnly: true, category: "hub", ...extra,
+  build(ctx) { const group = new THREE.Group(); const ex = make(group, ctx.spec, ctx) || {}; return { group, ...ex }; } });
+const floorOf = (g) => { g.traverse((o) => { o.userData.floor = true; }); return g; };
+
+// ---------------------------------------------------------------- building helpers
+/** a strip laid over the ground along pts ([[x, z]] local), width w, lifted lift: its uv runs along it in metres */
+function ribbon(pts, w, lift = 0.05, step = 0.8, skip = null) {
+  const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => V(x, 0, z)), false, "centripetal");
+  const n = Math.max(2, Math.round(curve.getLength() / step)), P2 = curve.getSpacedPoints(n);
+  const pos = [], uv = [], idx = [];
+  let len = 0;
+  for (let i = 0; i <= n; i++) {
+    const p = P2[i], q = P2[Math.min(n, i + 1)], o = P2[Math.max(0, i - 1)], tx = q.x - o.x, tz = q.z - o.z, tl = Math.hypot(tx, tz) || 1, nx = -tz / tl, nz = tx / tl;
+    if (i) len += p.distanceTo(P2[i - 1]);
+    for (const s of [-1, 1]) { const x = p.x + nx * s * w / 2, z = p.z + nz * s * w / 2; pos.push(x, parkHeightAt(x + CX, z + CZ) - (Math.hypot(x, z) < PLAZA ? 0 : 0) + lift, z); uv.push((s + 1) / 2, len / w); }
+  }
+  for (let i = 0; i < n; i++) {
+    const mx = (P2[i].x + P2[i + 1].x) / 2, mz = (P2[i].z + P2[i + 1].z) / 2;
+    if (skip?.(mx, mz)) continue;
+    const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+const onAnyDeck = (x, z) => DECKS.some((d) => { const o = onDeck({ ...d, len: d.len + 0.6, w: d.w + 1 }, x, z); return !!o; });
+function rockGeo(r, s) {
+  const g = new THREE.DodecahedronGeometry(s, 1), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = 0.75 + r() * 0.45; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.62, p.getZ(i) * k); }
+  g.computeVertexNormals(); return g;
+}
+function avenuePts(a, i) { const s = Math.sin(a), c = Math.cos(a), out = []; for (let d = PROM[1] - 0.6; d <= AVENUE_END[i]; d += 6) out.push([s * d, c * d]); return out; }
+
+// ---------------------------------------------------------------- the pieces
+export const PARK_CATALOG = {
+  /** the land: the terrace and the hills, the plaza, the retaining wall and its stairs, the paths, the bridge, the jetty and the lookout */
+  pkLand: P("Central Park", (g) => {
+    const T = pmats(), K = new Kit();
+    // the ground: one big sheet, carved, coloured by what's there (grass, darker in the hollows, pebbles by the water)
+    const S = 280, N = 250, geo = new THREE.PlaneGeometry(S, S, N, N).rotateX(-Math.PI / 2), p = geo.attributes.position, col = new Float32Array(p.count * 3), uv = geo.attributes.uv;
+    const r = seeded(3), c = new THREE.Color(), inner = new Uint8Array(p.count);
+    for (let i = 0; i < p.count; i++) {
+      let x = p.getX(i), z = p.getZ(i), rr = Math.hypot(x, z);
+      if (rr < PLAZA + 0.05) { inner[i] = 1; const k = (PLAZA + 0.05) / Math.max(rr, 1e-3); x *= k; z *= k; }
+      let h = rr < PLAZA + 0.05 ? TER : carved(x, z);
+      { const sw = nearStream(x, z); if (sw && sw.d < STREAM.hw[sw.i] + 1.0 && !onAnyDeck(x, z)) h = Math.min(h, STREAM.level[sw.i] - 0.25); }   // the grid is coarser than the stream: keep the bank under the water's edge
+      p.setXYZ(i, x, h, z); uv.setXY(i, x / 5, z / 5);
+      const s = nearStream(x, z), wet = s ? 1 - smooth(STREAM.hw[s.i], STREAM.hw[s.i] + 2.6, s.d) : 0;
+      const dp = Math.hypot(x - POND.x, z - POND.z), pw = 1 - smooth(pondR(Math.atan2(z - POND.z, x - POND.x)), pondR(Math.atan2(z - POND.z, x - POND.x)) + 2.4, dp);
+      const n = 0.5 + 0.5 * Math.sin(x * 0.21 + Math.sin(z * 0.13) * 2) * Math.sin(z * 0.17 - x * 0.05), hh = hills(x, z);
+      c.setRGB(0.42 + 0.08 * n, 0.6 + 0.08 * n - 0.03 * hh * 0.1, 0.28 + 0.04 * n);
+      c.lerp(new THREE.Color(0.72, 0.66, 0.55), Math.max(wet, pw) * 0.85);
+      c.multiplyScalar(0.92 + r() * 0.08);
+      col.set([c.r, c.g, c.b], i * 3);
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    // drop the triangles that lay wholly inside the plaza (their corners were all pulled onto its rim and would span it)
+    const ix = geo.index.array, keep = [], inside = (k) => inner[k];
+    for (let t = 0; t < ix.length; t += 3) if (!(inside(ix[t]) && inside(ix[t + 1]) && inside(ix[t + 2]))) keep.push(ix[t], ix[t + 1], ix[t + 2]);
+    geo.setIndex(keep); geo.computeVertexNormals();
+    const land = new THREE.Mesh(geo, T.terrain); land.receiveShadow = true; g.add(land);
+    // the plaza floor, the inlaid light rings, the wall and its coping
+    K.add(new THREE.CircleGeometry(PLAZA + 0.02, 128).rotateX(-Math.PI / 2), T.plaza, { y: 0.005 });
+    for (const rr of [11.2, 14, 17.6]) K.add(new THREE.RingGeometry(rr - 0.05, rr + 0.05, 160).rotateX(-Math.PI / 2), T.edge, { y: 0.02 });
+    const gapA = (STAIRS.half + 0.55) / PLAZA;
+    for (const a of DIRS) {
+      const t0 = a + gapA, len = Math.PI / 2 - 2 * gapA;
+      K.add(new THREE.CylinderGeometry(PLAZA, PLAZA, TER, 64, 1, true, t0, len), T.stone, { y: TER / 2 });
+      K.add(new THREE.CylinderGeometry(PLAZA - 0.02, PLAZA - 0.02, 0.06, 64, 1, true, t0, len), T.cyanGlow, { y: TER - 0.28 });
+      const cap = new THREE.RingGeometry(PLAZA - 0.25, PLAZA + 0.55, 64, 1, Math.PI / 2 - t0 - len, len).rotateX(-Math.PI / 2);
+      K.add(cap, T.white, { y: TER + 0.12 }); K.add(new THREE.CylinderGeometry(PLAZA - 0.25, PLAZA - 0.25, 0.12, 64, 1, true, t0, len), T.white, { y: TER + 0.06 });
+    }
+    // the four stairs, lit at every nose, between sloping cheek walls with a light line along the top
+    const dep = (STAIRS.r1 - STAIRS.r0) / STAIRS.n, rise = TER / STAIRS.n;
+    const cheek = new THREE.Shape([new THREE.Vector2(STAIRS.r0 - 0.3, 0), new THREE.Vector2(STAIRS.r1 + 0.6, 0), new THREE.Vector2(STAIRS.r1 + 0.6, TER + 0.5), new THREE.Vector2(STAIRS.r0 - 0.3, 0.45)]);
+    for (const a of DIRS) {
+      const s = Math.sin(a), c2 = Math.cos(a);
+      for (let k = 0; k < STAIRS.n; k++) {
+        const al = STAIRS.r0 + (k + 0.5) * dep, h = (k + 1) * rise;
+        K.box(STAIRS.half * 2, h, dep, T.stone, { x: s * al, z: c2 * al, y: h / 2, ry: a });
+        K.box(STAIRS.half * 2 - 0.2, 0.035, 0.05, T.cyanGlow, { x: s * (al - dep / 2 + 0.03), z: c2 * (al - dep / 2 + 0.03), y: h - 0.03, ry: a });
+      }
+      for (const side of [-1, 1]) {
+        const lat = side * (STAIRS.half + 0.28);
+        const geo2 = new THREE.ExtrudeGeometry(cheek, { depth: 0.56, bevelEnabled: false }).translate(0, 0, -0.28);
+        geo2.rotateY(-Math.PI / 2);                                   // shape x (along) -> world z, then turn to the stair
+        K.add(geo2, T.white, { x: Math.cos(a) * lat, z: -Math.sin(a) * lat, ry: a });
+        const top = new THREE.Vector3(), L0 = V(Math.cos(a) * lat + s * (STAIRS.r0 - 0.3), 0.5, -Math.sin(a) * lat + c2 * (STAIRS.r0 - 0.3)), L1 = V(Math.cos(a) * lat + s * (STAIRS.r1 + 0.6), TER + 0.55, -Math.sin(a) * lat + c2 * (STAIRS.r1 + 0.6));
+        top.subVectors(L1, L0);
+        const rail = new THREE.CylinderGeometry(0.035, 0.035, top.length(), 6).rotateX(Math.PI / 2);
+        const m = new THREE.Matrix4().lookAt(L0, L1, V(0, 1, 0)); const q = new THREE.Quaternion().setFromRotationMatrix(m);
+        const e = new THREE.Euler().setFromQuaternion(q);
+        K.add(rail, T.cyanGlow, { x: (L0.x + L1.x) / 2, y: (L0.y + L1.y) / 2 + 0.02, z: (L0.z + L1.z) / 2, rx: e.x, ry: e.y, rz: e.z });
+      }
+    }
+    // the promenade round the terrace, edged in light
+    K.add(new THREE.RingGeometry(PROM[0], PROM[1], 160).rotateX(-Math.PI / 2), T.path, { y: TER + 0.03, uv: 4 });
+    for (const rr of PROM) K.add(new THREE.RingGeometry(rr - 0.06, rr + 0.06, 160).rotateX(-Math.PI / 2), T.edge, { y: TER + 0.045 });
+    // the avenues out, the trail up to the lookout, the walk down to the jetty
+    const inWater = (x, z) => { const s = nearStream(x, z); return (s && s.d < STREAM.hw[s.i] + 1.2) || onAnyDeck(x, z); };
+    DIRS.forEach((a, i) => {
+      const pts = avenuePts(a, i);
+      K.add(ribbon(pts, 5, 0.05, 0.8, inWater), T.path);
+      for (const side of [-1, 1]) {
+        const off = pts.map(([x, z]) => [x + Math.cos(a) * side * 2.5, z - Math.sin(a) * side * 2.5]);
+        K.add(ribbon(off, 0.13, 0.07, 0.8, inWater), T.edge);
+      }
+    });
+    K.add(ribbon(TRAIL, 3, 0.05, 0.6), T.path);
+    K.add(ribbon(SIDEWALK, 2.8, 0.05, 0.6, inWater), T.path);
+    // the lookout: a white disc with slim columns and a halo roof
+    const ly = LOOK_Y;
+    K.cyl(LOOK.r, LOOK.r + 0.25, 0.6, T.white, { x: LOOK.x, z: LOOK.z, y: ly - 0.3 }, 48);
+    K.add(new THREE.RingGeometry(LOOK.r - 0.4, LOOK.r - 0.28, 64).rotateX(-Math.PI / 2), T.cyanGlow, { x: LOOK.x, z: LOOK.z, y: ly + 0.01 });
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU + 0.2; K.cyl(0.11, 0.14, 3.6, T.white, { x: LOOK.x + Math.cos(a) * (LOOK.r - 0.6), z: LOOK.z + Math.sin(a) * (LOOK.r - 0.6), y: ly + 1.8 }, 10); }
+    K.cyl(LOOK.r + 0.5, LOOK.r + 0.2, 0.22, T.white, { x: LOOK.x, z: LOOK.z, y: ly + 3.7 }, 48);
+    K.add(new THREE.TorusGeometry(LOOK.r + 0.05, 0.05, 6, 64).rotateX(Math.PI / 2), T.cyanGlow, { x: LOOK.x, z: LOOK.z, y: ly + 3.56 });
+    K.add(new THREE.SphereGeometry(LOOK.r * 0.55, 32, 10, 0, TAU, 0, Math.PI / 2).scale(1, 0.32, 1), T.white, { x: LOOK.x, z: LOOK.z, y: ly + 3.8 });
+    // the bridge and the jetty
+    for (const d of DECKS) {
+      const s = Math.sin(d.ang), c2 = Math.cos(d.ang), n = 20, plank = d.len / n;
+      for (let k = 0; k < n; k++) {
+        const u = (k + 0.5) / n - 0.5, y = deckY(d, u), y0 = deckY(d, u - 0.5 / n), y1 = deckY(d, u + 0.5 / n);
+        const tilt = Math.atan2(y1 - y0, plank);
+        K.box(d.w, 0.12, plank + 0.02, d.kind === "bridge" ? T.white : T.timber, { x: d.x + s * u * d.len, z: d.z + c2 * u * d.len, y: y - 0.06, ry: d.ang, rx: -tilt, order: "YXZ" });
+        if (d.kind === "jetty" && k % 4 === 1) for (const sd of [-1, 1]) K.cyl(0.12, 0.12, 1.6, T.timber, { x: d.x + s * u * d.len + c2 * sd * (d.w / 2 - 0.1), z: d.z + c2 * u * d.len - s * sd * (d.w / 2 - 0.1), y: y - 0.7 }, 8);
+        if (d.kind === "bridge") for (const sd of [-1, 1]) {
+          const ex = d.x + s * u * d.len + c2 * sd * (d.w / 2 - 0.08), ez = d.z + c2 * u * d.len - s * sd * (d.w / 2 - 0.08);
+          K.box(0.06, 0.9, plank + 0.02, T.glass, { x: ex, z: ez, y: y + 0.45, ry: d.ang, rx: -tilt, order: "YXZ" });
+          K.box(0.1, 0.06, plank + 0.03, T.cyanGlow, { x: ex, z: ez, y: y + 0.93, ry: d.ang, rx: -tilt, order: "YXZ" });
+        }
+      }
+      if (d.kind === "bridge") {                                           // its arch underneath, white, with a light line
+        const pts = []; for (let k = 0; k <= 16; k++) { const u = k / 16 - 0.5; pts.push(V(d.x + s * u * d.len, deckY(d, u) - 0.25 - 0.5 * Math.cos(Math.PI * u) * 0, d.z + c2 * u * d.len)); }
+        for (const sd of [-1, 1]) {
+          const off = pts.map((q) => q.clone().add(V(c2 * sd * (d.w / 2 - 0.25), 0, -s * sd * (d.w / 2 - 0.25))));
+          K.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(off), 32, 0.2, 8, false), T.white);
+          K.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(off.map((q) => q.clone().add(V(0, -0.22, 0)))), 32, 0.04, 6, false), T.cyanGlow);
+        }
+      }
+    }
+    // rocks along the banks and round the spring and the pond
+    const rr = seeded(101);
+    for (let i = 0; i <= STREAM.N; i += 7) {
+      for (const sd of [-1, 1]) {
+        if (rr() < 0.35) continue;
+        const j = Math.min(STREAM.N, i + 1), tx = STREAM.x[j] - STREAM.x[Math.max(0, i - 1)], tz = STREAM.z[j] - STREAM.z[Math.max(0, i - 1)], tl = Math.hypot(tx, tz) || 1;
+        const d = STREAM.hw[i] + 0.3 + rr() * 1.2, x = STREAM.x[i] - tz / tl * sd * d, z = STREAM.z[i] + tx / tl * sd * d;
+        if (onAnyDeck(x, z) || i >= STREAM.first) continue;
+        K.add(rockGeo(rr, 0.35 + rr() * 0.6), rr() < 0.5 ? T.rock : T.mossRock, { x, z, y: carved(x, z) + 0.05, ry: rr() * TAU });
+      }
+    }
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU, x = STREAM.x[0] + Math.cos(a) * 2.3, z = STREAM.z[0] + Math.sin(a) * 2.3; if (i === 2) continue; K.add(rockGeo(rr, 0.7 + rr() * 0.6), T.mossRock, { x, z, y: carved(x, z) + 0.15, ry: rr() * TAU }); }
+    for (let i = 0; i < 40; i++) {
+      const a = rr() * TAU, rp = pondR(a) + 0.2 + rr() * 1.2, x = POND.x + Math.cos(a) * rp, z = POND.z + Math.sin(a) * rp;
+      if (onAnyDeck(x, z) || (nearStream(x, z)?.d ?? 9) < 3) continue;
+      K.add(rockGeo(rr, 0.3 + rr() * 0.55), rr() < 0.4 ? T.mossRock : T.rock, { x, z, y: POND_Y + 0.05, ry: rr() * TAU });
+    }
+    K.into(g);
+    floorOf(g);
+  }, { flat: true, walk: true, stay: true, colliders: () => [], info: "Central Park: a sunken fountain plaza, the terrace round it, and hills, a stream and a lily pond beyond." }),
+
+  /** the fountain: a white basin, a stepped middle tier spilling a ring of water, arcing jets, mist */
+  pkFountain: P("The fountain", (g) => {
+    const T = pmats(), K = new Kit();
+    const lip = [[BASIN.r - 0.9, 0], [BASIN.r - 0.9, BASIN.top - 0.08], [BASIN.r - 0.8, BASIN.top], [BASIN.r + 0.05, BASIN.top + 0.02], [BASIN.r + 0.15, BASIN.top - 0.1], [BASIN.r + 0.15, 0]].map(([x, y]) => new THREE.Vector2(x, y));
+    K.add(new THREE.LatheGeometry(lip, 128), T.white);
+    K.add(new THREE.TorusGeometry(BASIN.r - 0.35, 0.03, 6, 160).rotateX(Math.PI / 2), T.cyanGlow, { y: BASIN.top + 0.03 });
+    K.add(new THREE.CircleGeometry(BASIN.r - 0.88, 96).rotateX(-Math.PI / 2), T.bed, { y: 0.03 });
+    // the middle tier and the pedestal
+    const tier = [[5.15, 0], [5.15, 0.98], [5.3, 1.06], [5.62, 1.02], [5.7, 0.9], [5.4, 0.2], [5.4, 0]].map(([x, y]) => new THREE.Vector2(x, y));
+    K.add(new THREE.LatheGeometry(tier, 96), T.white);
+    K.add(new THREE.TorusGeometry(5.62, 0.025, 6, 128).rotateX(Math.PI / 2), T.goldGlow, { y: 1.02 });
+    const ped = [[0, 1.55], [2.2, 1.55], [2.45, 1.48], [2.6, 1.3], [2.6, 0], [0, 0]].map(([x, y]) => new THREE.Vector2(x, y));
+    K.add(new THREE.LatheGeometry(ped, 96), T.white);
+    for (const [rr, y] of [[2.62, 1.0], [2.62, 0.7]]) K.add(new THREE.TorusGeometry(rr, 0.035, 6, 96).rotateX(Math.PI / 2), T.cyanGlow, { y });
+    K.add(new THREE.RingGeometry(1.2, 2.0, 96).rotateX(-Math.PI / 2), T.darkMetal, { y: 1.56 });
+    for (const rr of [1.25, 1.6, 1.95]) K.add(new THREE.RingGeometry(rr - 0.03, rr + 0.03, 96).rotateX(-Math.PI / 2), T.goldGlow, { y: 1.57 });
+    K.add(new THREE.CircleGeometry(1.2, 48).rotateX(-Math.PI / 2), T.cyanGlow, { y: 1.57 });
+    // 24 nozzles round the rim
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; K.cyl(0.07, 0.11, 0.2, T.metal, { x: Math.cos(a) * (BASIN.r - 0.55), z: Math.sin(a) * (BASIN.r - 0.55), y: BASIN.top + 0.08 }, 8); }
+    K.into(g);
+    // the water: the big pool, the tier's pool, the falling ring between them
+    const pool = new THREE.Mesh(new THREE.RingGeometry(5.6, BASIN.r - 0.85, 128, 2).rotateX(-Math.PI / 2), T.pool); pool.position.y = BASIN.water;
+    const tierW = new THREE.Mesh(new THREE.RingGeometry(2.55, 5.2, 96, 1).rotateX(-Math.PI / 2), T.pool); tierW.position.y = 0.96;
+    for (const m of [pool, tierW]) { const n = m.geometry.attributes.position.count; m.geometry.setAttribute("aFoam", new THREE.BufferAttribute(new Float32Array(n).fill(0.25), 1)); g.add(m); }
+    const curtain = new THREE.Mesh(new THREE.CylinderGeometry(5.66, 5.8, 0.52, 128, 1, true), T.curtain); curtain.position.y = 0.76; g.add(curtain);
+    // the jets: droplets on arcs from the rim to the tier
+    const J = 24, D = 26, N = J * D, pos = new Float32Array(N * 3);
+    const drops = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos, 3)),
+      new THREE.PointsMaterial({ map: T.M.tex.glowDisc, color: 0xd8f6ff, size: 0.26, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    drops.frustumCulled = false; g.add(drops);
+    const ringR = new Float32Array(J * 3);
+    // mist where the ring of water lands, and over the jets' landing
+    const mist = [];
+    for (let i = 0; i < 14; i++) { const s = new THREE.Sprite(T.M.puff.clone()); s.material.opacity = 0.18; s.material.userData.shared = false; const a = (i / 14) * TAU; s.position.set(Math.cos(a) * 6.6, 0.95, Math.sin(a) * 6.6); s.scale.setScalar(2.4); g.add(s); mist.push([s, a]); }
+    return { update(t) {
+      PARK_U.uTime.value = t;
+      const p = drops.geometry.attributes.position;
+      for (let j = 0; j < J; j++) {
+        const a = (j / J) * TAU, ca = Math.cos(a), sa = Math.sin(a), r0 = BASIN.r - 0.55, r1 = 6.3, H = 2.6 + 0.5 * Math.sin(t * 0.7 + j * 0.9);
+        for (let k = 0; k < D; k++) {
+          const u = ((t * 0.55 + k / D + j * 0.13) % 1), rr = lerp(r0, r1, u), y = BASIN.top + 0.15 + 4 * H * u * (1 - u) - u * 0.3;
+          p.setXYZ(j * D + k, ca * rr, y, sa * rr);
+        }
+      }
+      p.needsUpdate = true;
+      for (const [s, a] of mist) { const k = (t * 0.25 + a) % 1; s.material.opacity = 0.16 * Math.sin(k * Math.PI); s.scale.setScalar(2 + k * 1.6); s.position.y = 0.8 + k * 0.8; }
+    } };
+  }, { stay: true, act: "board", colliders: () => [], info: "The fountain. Above it, larger than life, whoever has the most Lumen on any server." }),
+
+  /** the hologram of number one: a giant figure of light turning slowly on the pedestal, a crown over it, their name on a band round it */
+  pkHolo: P("Number one", (g) => {
+    const T = pmats(), H = 10.5, base = 1.62;
+    const U = { uTime: PARK_U.uTime, uGlitch: { value: 0 }, uBase: { value: base }, uHeight: { value: H }, uFlick: { value: 1 }, uCore: { value: new THREE.Color(0x58d8ff) }, uRim: { value: new THREE.Color(0xffd27a) } };
+    const mat = holoMat(U), parts = [];
+    const add = (geo, x = 0, y = 0, z = 0, o = {}) => { geo.applyMatrix4(new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx || 0, o.ry || 0, o.rz || 0)), V(o.sx || 1, o.sy || 1, o.sz || 1))); for (const k of Object.keys(geo.attributes)) if (k !== "position" && k !== "normal") geo.deleteAttribute(k); parts.push(geo.index ? geo.toNonIndexed() : geo); };
+    const limb = (a, b, r0, r1) => { const d = new THREE.Vector3().subVectors(b, a), geo = new THREE.CylinderGeometry(r1, r0, d.length(), 20, 1, true); const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.clone().normalize()); geo.applyQuaternion(q); const m = a.clone().add(b).multiplyScalar(0.5); geo.translate(m.x, m.y, m.z); for (const k of Object.keys(geo.attributes)) if (k !== "position" && k !== "normal") geo.deleteAttribute(k); parts.push(geo.toNonIndexed()); add(new THREE.SphereGeometry(r1, 16, 12), b.x, b.y, b.z); };
+    // a figure 1 unit tall, heroic proportions: legs, a fitted jacket with a raised collar, one arm raised to wave
+    const leg = [[0.0, 0.0], [0.03, 0.0], [0.034, 0.03], [0.024, 0.05], [0.03, 0.13], [0.037, 0.21], [0.031, 0.27], [0.042, 0.34], [0.052, 0.43], [0.056, 0.5], [0, 0.5]].map(([r, y]) => new THREE.Vector2(r, y));
+    for (const s of [-1, 1]) add(new THREE.LatheGeometry(leg, 24), s * 0.058, 0, 0, { sz: 0.9 });
+    for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.034, 16, 10).scale(1, 0.55, 1.9), s * 0.058, 0.018, 0.025);
+    const torso = [[0, 0.46], [0.1, 0.47], [0.112, 0.52], [0.095, 0.6], [0.108, 0.68], [0.125, 0.75], [0.12, 0.8], [0.07, 0.83], [0, 0.835]].map(([r, y]) => new THREE.Vector2(r, y));
+    add(new THREE.LatheGeometry(torso, 32), 0, 0, 0, { sz: 0.62 });
+    const coat = [[0.122, 0.36], [0.118, 0.46], [0.11, 0.58], [0.118, 0.68], [0.132, 0.76]].map(([r, y]) => new THREE.Vector2(r, y));
+    add(new THREE.LatheGeometry(coat, 32, Math.PI * 0.62, Math.PI * 1.76), 0, 0, 0, { sz: 0.7 });
+    add(new THREE.CylinderGeometry(0.06, 0.075, 0.06, 24, 1, true), 0, 0.85, -0.005, { sz: 0.8 });   // the collar
+    add(new THREE.CylinderGeometry(0.03, 0.034, 0.06, 16, 1, true), 0, 0.86, 0);
+    add(new THREE.SphereGeometry(0.068, 32, 24), 0, 0.93, 0.004, { sx: 0.9, sy: 1.08, sz: 0.98 });
+    add(new THREE.SphereGeometry(0.074, 32, 16, 0, TAU, 0, Math.PI * 0.55), 0, 0.935, -0.008, { sx: 0.95, sz: 1.04, rx: -0.25 });
+    add(new THREE.TorusGeometry(0.066, 0.009, 8, 32, Math.PI * 0.9), 0, 0.94, 0.006, { rx: Math.PI / 2, rz: Math.PI * 0.05, sx: 0.98 });   // a visor band
+    for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.05, 16, 12), s * 0.122, 0.79, 0, { sx: 1.15, sy: 0.85 });
+    const sh = (s) => V(s * 0.128, 0.785, 0);
+    limb(sh(-1), V(-0.158, 0.6, 0.01), 0.04, 0.034); limb(V(-0.158, 0.6, 0.01), V(-0.17, 0.44, 0.04), 0.033, 0.026);
+    add(new THREE.SphereGeometry(0.03, 12, 10).scale(0.8, 1.3, 0.9), -0.172, 0.415, 0.045);
+    limb(sh(1), V(0.235, 0.86, 0.02), 0.04, 0.034); limb(V(0.235, 0.86, 0.02), V(0.27, 1.02, 0.04), 0.033, 0.026);
+    const hand = new THREE.Group(); hand.position.set(0.27, 1.02, 0.04);
+    add(new THREE.SphereGeometry(0.033, 12, 10).scale(0.85, 1.35, 0.55), 0.274, 1.058, 0.042);
+    const geo = mergeAll(parts); geo.computeBoundingSphere();
+    const fig = new THREE.Mesh(geo, mat); fig.scale.setScalar(H); fig.position.y = base; fig.renderOrder = 3;
+    const spin = new THREE.Group(); spin.add(fig); g.add(spin);
+    // the crown over its head, the cone of light under it, sparks spiralling up round it, the name band
+    const crown = new THREE.Group(), CK = new Kit();
+    CK.add(new THREE.CylinderGeometry(0.62, 0.55, 0.32, 40, 1, true), T.goldGlow);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; CK.add(new THREE.ConeGeometry(0.12, 0.5, 8), T.goldGlow, { x: Math.cos(a) * 0.6, z: Math.sin(a) * 0.6, y: 0.38 }); CK.add(new THREE.OctahedronGeometry(0.09), T.cyanGlow, { x: Math.cos(a) * 0.6, z: Math.sin(a) * 0.6, y: 0.7 }); }
+    CK.into(crown, { cast: false }); crown.position.y = base + H * 1.1; g.add(crown);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: T.M.tex.glowDisc, color: 0xffd27a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
+    halo.scale.setScalar(4); halo.position.y = crown.position.y + 0.2; g.add(halo);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 2.0, H + 1.5, 64, 1, true), beamConeMat(0x7fe9ff)); cone.position.y = base + (H + 1.5) / 2; g.add(cone);
+    const NS = 260, sp = new Float32Array(NS * 3), sd = [], r = seeded(17);
+    for (let i = 0; i < NS; i++) sd.push([r() * TAU, 0.05 + r() * 0.12, 2.6 + r() * 2.2, r()]);
+    const sparks = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(sp, 3)),
+      new THREE.PointsMaterial({ map: T.M.tex.glowDisc, color: 0xffe2a0, size: 0.3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+    sparks.frustumCulled = false; g.add(sparks);
+    let row = boardRows()[0], seen = 0, bandTex = leaderBand(row);
+    const bandMat = new THREE.MeshBasicMaterial({ map: bandTex, transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.95, 128, 1, true), bandMat); band.position.y = base + H * 0.3; g.add(band);
+    const band2 = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.95, 128, 1, true), bandMat); band2.position.y = band.position.y; band2.scale.x = -1; g.add(band2);   // read from inside too
+    const rings = [0, 1, 2].map((i) => { const m = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2), T.softCyan); m.position.y = BASIN.water + 0.02; g.add(m); return [m, i / 3]; });
+    let glitchAt = 3;
+    return { update(t, dt = 0.016) {
+      spin.rotation.y = t * 0.12;
+      fig.position.y = base + Math.sin(t * 0.8) * 0.08;
+      crown.rotation.y = -t * 0.6; crown.position.y = base + H * 1.1 + Math.sin(t * 1.1) * 0.12;
+      band.rotation.y = band2.rotation.y = t * 0.18;
+      const f = MAIN_FX.flare;
+      glitchAt -= dt; if (glitchAt < 0) glitchAt = 2.5 + Math.random() * 5;
+      U.uGlitch.value = glitchAt < 0.18 ? 1 : 0;
+      U.uFlick.value = (glitchAt < 0.12 ? 0.6 : 1) * (0.93 + 0.07 * Math.sin(t * 23) * Math.sin(t * 7.3)) * (1 + f);
+      halo.material.opacity = 0.45 + 0.15 * Math.sin(t * 2);
+      const p = sparks.geometry.attributes.position;
+      for (let i = 0; i < NS; i++) { const [a0, sp2, rr, ph] = sd[i], k = (t * sp2 + ph) % 1, a = a0 + t * 0.5 + k * 3; p.setXYZ(i, Math.cos(a) * rr * (1 - k * 0.4), base + k * H * 1.15, Math.sin(a) * rr * (1 - k * 0.4)); }
+      p.needsUpdate = true;
+      for (const [m, o] of rings) { const k = (t * 0.22 + o) % 1; m.scale.setScalar(2.8 + k * 6.4); m.material.opacity = 0.5; m.visible = true; m.material.opacity = 0.5 * (1 - k); }
+      if (boardVersion() !== seen && t - (this._drew || -9) > 2) {
+        seen = boardVersion(); this._drew = t;
+        const top = boardRows()[0];
+        if (top && (top.name !== row?.name || top.vcash !== row?.vcash)) { row = top; bandTex.dispose(); bandTex = leaderBand(row); bandMat.map = bandTex; bandMat.needsUpdate = true; }
+      }
+    } };
+  }, { stay: true, act: "board", colliders: () => [], info: "Whoever has the most Lumen on any server, larger than life. Click to see the whole board." }),
+
+  /** the stream and the pond: moving water, lily pads, reeds, a little bubbling at the spring and mist where it falls */
+  pkWater: P("Stream and pond", (g) => {
+    const T = pmats(), S = STREAM;
+    const pos = [], uv = [], foam = [], idx = [];
+    for (let i = 0; i <= S.N; i++) {
+      const j = Math.min(S.N, i + 1), o = Math.max(0, i - 1), tx = S.x[j] - S.x[o], tz = S.z[j] - S.z[o], tl = Math.hypot(tx, tz) || 1, nx = -tz / tl, nz = tx / tl;
+      const drop = Math.max(0, (S.level[o] - S.level[j]) / Math.max(0.1, S.len[j] - S.len[o])), w = S.hw[i] + 0.35;
+      for (const s of [-1, 1]) { pos.push(S.x[i] + nx * s * w, S.level[i], S.z[i] + nz * s * w); uv.push((s + 1) / 2, S.len[i] / 3.2); foam.push(Math.min(1, drop * 2.2) + (i < 12 ? 0.6 * (1 - i / 12) : 0)); }
+    }
+    for (let i = 0; i < S.N; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); geo.setAttribute("aFoam", new THREE.Float32BufferAttribute(foam, 1)); geo.setIndex(idx); geo.computeVertexNormals();
+    const stream = new THREE.Mesh(geo, T.stream); stream.renderOrder = 1; g.add(stream);
+    // the pond: its shore wobbles, foam where the stream comes in
+    const PN = 96, pp = [POND.x, POND_Y, POND.z], pf = [0.35], pidx = [];
+    for (let i = 0; i <= PN; i++) { const a = (i / PN) * TAU, rr = pondR(a) + 0.4; pp.push(POND.x + Math.cos(a) * rr, POND_Y, POND.z + Math.sin(a) * rr); const ex = POND.x + Math.cos(a) * rr, ez = POND.z + Math.sin(a) * rr; pf.push(Math.max(0, 1 - Math.hypot(ex - S.x[S.N], ez - S.z[S.N]) / 9) * 0.8 + 0.12); }
+    for (let i = 1; i <= PN; i++) pidx.push(0, i + 1, i);
+    const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute("aFoam", new THREE.Float32BufferAttribute(pf, 1)); pg.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array((PN + 2) * 2), 2)); pg.setIndex(pidx); pg.computeVertexNormals();
+    const pond = new THREE.Mesh(pg, T.pond); g.add(pond);
+    // lily pads and a few lotus flowers, reeds round the edge
+    const K = new Kit(), r = seeded(55), pads = [];
+    for (let i = 0; i < 34; i++) {
+      const a = r() * TAU, d = 2 + r() * (POND.r - 4), x = POND.x + Math.cos(a) * d, z = POND.z + Math.sin(a) * d;
+      if (DECKS.some((dk) => onDeck({ ...dk, w: dk.w + 2, len: dk.len + 2 }, x, z))) continue;
+      const s = 0.45 + r() * 0.45;
+      K.add(new THREE.CircleGeometry(s, 18, 0.3, TAU - 0.5).rotateX(-Math.PI / 2), T.pad, { x, z, y: POND_Y + 0.02, ry: r() * TAU });
+      if (r() < 0.3) { for (let k = 0; k < 6; k++) { const pa = (k / 6) * TAU; K.add(new THREE.ConeGeometry(0.09, 0.22, 5).translate(0, 0.11, 0), T.lotus, { x: x + Math.cos(pa) * 0.07, z: z + Math.sin(pa) * 0.07, y: POND_Y + 0.04, rz: Math.cos(pa) * 0.5, rx: -Math.sin(pa) * 0.5 }); } pads.push([x, z]); }
+    }
+    for (let i = 0; i < 26; i++) {
+      const a = r() * TAU, rp = pondR(a) - 0.2 - r() * 0.8, cx = POND.x + Math.cos(a) * rp, cz = POND.z + Math.sin(a) * rp;
+      if (DECKS.some((dk) => onDeck({ ...dk, w: dk.w + 2, len: dk.len + 2 }, cx, cz)) || Math.hypot(cx - S.x[S.N], cz - S.z[S.N]) < 6) continue;
+      for (let k = 0; k < 7; k++) K.add(new THREE.ConeGeometry(0.035, 1.1 + r() * 0.9, 4).translate(0, 0.55, 0), T.reed, { x: cx + (r() - 0.5) * 0.8, z: cz + (r() - 0.5) * 0.8, y: POND_Y - 0.1, rx: (r() - 0.5) * 0.3, rz: (r() - 0.5) * 0.3 });
+    }
+    K.into(g, { cast: false });
+    const lotusGlow = pads.map(([x, z]) => { const s = new THREE.Sprite(T.M.haloWarm); s.position.set(x, POND_Y + 0.3, z); s.scale.setScalar(0.9); g.add(s); return s; });
+    // mist over every cascade, bubbling at the spring
+    const mists = [];
+    for (let i = 4; i < S.first; i++) {
+      const dl = S.level[i - 4] - S.level[Math.min(S.N, i + 4)];
+      if (dl > 0.4 && (!mists.length || i - mists[mists.length - 1][2] > 14)) { const s = new THREE.Sprite(T.M.puff.clone()); s.material.userData.shared = false; s.material.opacity = 0.2; s.position.set(S.x[i], S.level[i] + 0.3, S.z[i]); s.scale.setScalar(2); g.add(s); mists.push([s, i * 0.37, i]); }
+    }
+    const NB = 40, bp = new Float32Array(NB * 3), bs = [];
+    for (let i = 0; i < NB; i++) bs.push([r() * TAU, r() * 0.9, r()]);
+    const bub = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(bp, 3)), new THREE.PointsMaterial({ map: T.M.tex.glowDisc, color: 0xe8fbff, size: 0.18, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    bub.frustumCulled = false; g.add(bub);
+    return { update(t) {
+      PARK_U.uTime.value = t;
+      for (const [s, ph] of mists) { const k = (t * 0.3 + ph) % 1; s.material.opacity = 0.22 * Math.sin(k * Math.PI); s.scale.setScalar(1.6 + k * 1.8); }
+      for (const [i, s] of lotusGlow.entries()) s.material.opacity = 0.35 + 0.15 * Math.sin(t * 1.3 + i);
+      const p = bub.geometry.attributes.position;
+      for (let i = 0; i < NB; i++) { const [a, d, ph] = bs[i], k = (t * 0.7 + ph) % 1; p.setXYZ(i, S.x[0] + Math.cos(a) * d, S.level[0] + k * 0.5, S.z[0] + Math.sin(a) * d); }
+      p.needsUpdate = true;
+    } };
+  }, { flat: true, walk: true, stay: true, colliders: () => [], info: "A spring high on the north hill. Its stream tumbles down in little falls, under the bridge, and into the lily pond." }),
+
+  /** grass swaying in tufts, and motes of pollen drifting in the light */
+  pkLife: P("Meadow", (g, s) => {
+    const T = pmats(), r = seeded(808);
+    const blade = new THREE.BufferGeometry(), bpos = [];
+    for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI + r() * 0.3, h = 0.35 + r() * 0.3, w = 0.05, ca = Math.cos(a) * w, sa = Math.sin(a) * w, lx = Math.cos(a + 1.2) * 0.08, lz = Math.sin(a + 1.2) * 0.08; bpos.push(-ca, 0, -sa, ca, 0, sa, lx, h, lz); }
+    blade.setAttribute("position", new THREE.Float32BufferAttribute(bpos, 3)); blade.computeVertexNormals();
+    const mat = T.tuft.clone(); mat.userData.shared = false;
+    const U = { uTime: PARK_U.uTime };
+    mat.onBeforeCompile = (sh) => { sh.uniforms.uTime = U.uTime; sh.vertexShader = "uniform float uTime;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nfloat ph = instanceMatrix[3].x * 0.31 + instanceMatrix[3].z * 0.23;\ntransformed.x += sin(uTime * 1.7 + ph) * 0.18 * position.y;\ntransformed.z += cos(uTime * 1.3 + ph) * 0.12 * position.y;"); };
+    const NT = 4200, tufts = new THREE.InstancedMesh(blade, mat, NT), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+    let n = 0;
+    for (let tries = 0; n < NT && tries < NT * 4; tries++) {
+      const a = r() * TAU, d = 20 + Math.sqrt(r()) * 95, x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (!parkWalkable(x + CX, z + CZ) || onPath(x, z)) continue;
+      const y = carved(x, z); if (Math.abs(Math.hypot(x, z) - 25) < 2.6) continue;
+      const sc = 0.8 + r() * 1.2; m4.compose(V(x, y, z), q.setFromAxisAngle(V(0, 1, 0), r() * TAU), V(sc, sc * (0.8 + r() * 0.6), sc)); tufts.setMatrixAt(n++, m4);
+    }
+    tufts.count = n; tufts.frustumCulled = false; tufts.receiveShadow = true; g.add(tufts);
+    const NM = 700, mp = new Float32Array(NM * 3), md = [];
+    for (let i = 0; i < NM; i++) { const a = r() * TAU, d = Math.sqrt(r()) * 90; md.push([Math.cos(a) * d, Math.sin(a) * d, 0.6 + r() * 5, r() * TAU, 0.2 + r() * 0.5]); }
+    const motes = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(mp, 3)),
+      new THREE.PointsMaterial({ map: T.M.tex.glowDisc, color: 0xfff1c8, size: 0.16, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    motes.frustumCulled = false; g.add(motes);
+    for (const d of md) d[5] = parkHeightAt(d[0] + CX, d[1] + CZ);
+    return { update(t) {
+      const p = motes.geometry.attributes.position;
+      for (let i = 0; i < NM; i++) { const [x, z, h, ph, sp, y0] = md[i]; p.setXYZ(i, x + Math.sin(t * sp + ph) * 1.6, y0 + h + Math.sin(t * sp * 1.7 + ph) * 0.5, z + Math.cos(t * sp * 0.8 + ph) * 1.6); }
+      p.needsUpdate = true;
+    } };
+  }, { flat: true, walk: true, stay: true, colliders: () => [], info: "Long grass, and pollen drifting in the sun." }),
+};
+function mergeAll(list) {
+  let count = 0; for (const g of list) count += g.attributes.position.count;
+  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3); let o = 0;
+  for (const g of list) { pos.set(g.attributes.position.array, o * 3); if (g.attributes.normal) nor.set(g.attributes.normal.array, o * 3); o += g.attributes.position.count; }
+  const out = new THREE.BufferGeometry(); out.setAttribute("position", new THREE.BufferAttribute(pos, 3)); out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  return out;
+}
+const clearOfStream = (x, z, pad) => { const s = nearStream(x, z); return !s || s.d > STREAM.hw[s.i] + pad; };
+/** on (or right beside) one of the paths */
+function onPath(x, z) {
+  const r = Math.hypot(x, z);
+  if (r > PROM[0] - 1 && r < PROM[1] + 1) return true;
+  for (let i = 0; i < 4; i++) { const a = DIRS[i], along = x * Math.sin(a) + z * Math.cos(a), lat = x * Math.cos(a) - z * Math.sin(a); if (along > 0 && along < AVENUE_END[i] + 2 && Math.abs(lat) < 3.4) return true; }
+  for (const L of [TRAIL, SIDEWALK]) for (let i = 1; i < L.length; i++) { const [ax, az] = L[i - 1], [bx, bz] = L[i], dx = bx - ax, dz = bz - az, k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); if (Math.hypot(x - ax - dx * k, z - az - dz * k) < 2.4) return true; }
+  if (Math.abs(r - RING_R) < 2.6) return true;
+  for (const [L, w] of PATHS) for (let i = 1; i < L.length; i++) if (segDist(x, z, L[i - 1], L[i]) < w / 2 + 0.9) return true;
+  return Math.hypot(x - LOOK.x, z - LOOK.z) < LOOK.r + 1.5;
+}
+
+// ---------------------------------------------------------------- the hub
+/** the park's insides, for parkplaces.js (which builds the places people stop at and fills the land) */
+export const PK = {
+  CX, CZ, PLAZA, TER, PROM, DIRS, TEA, RING_R, EDGE_R, LOOK, POND, STREAM, DECKS, PLACES, CIRCLES, PERGOLA, PATHS, AVENUE_END, BASIN,
+  teaRaw, teaR, gazY, padY, baseT, carved, amphiAt, nearStream, onDeck, onAnyDeck, onPath, inPlace, clearOfStream, segDist, pondR,
+  ribbon, rockGeo, pmats, mergeAll, P, floorOf, PARK_U, NOISE, seeded, smooth, lerp, faceTo,
+};
+
+const NAMES = ["Mika", "Jun", "Lia", "Kai", "Noor", "Ren", "Ivy", "Theo", "Ana", "Sam", "Inés", "Oli", "Zed", "Pia", "Maya", "Leo", "Rae", "Eda", "Tom", "Aiko", "Bea", "Cyrus", "Dani", "Elio", "Fen", "Gus", "Hana", "Ilan", "Jade", "Kofi", "Luz", "Milo"];
+const TONES = ["#f27ea6", "#5fb8e8", "#f2c14e", "#7cc576", "#b48ae8", "#6fc3b2", "#e58fb4", "#7fa8e0", "#e29a7f", "#9dcf80", "#d68fd8", "#74c5d6"];
+
+export function centralPark() {
+  const W = (x, z) => [x + CX, z + CZ];
+  const items = [{ type: "hubGround", x: 0, z: 0, tone: 0x5d7f3e, size: 1400 }, { type: "pkLand", x: CX, z: CZ }, { type: "pkWater", x: CX, z: CZ }, { type: "pkFountain", x: CX, z: CZ }, { type: "pkHolo", x: CX, z: CZ }, { type: "pkLife", x: CX, z: CZ }];
+  const at = (type, lx, lz, o = {}) => { const [x, z] = W(lx, lz); items.push({ type, x, z, y: parkHeightAt(x, z), ...o }); };
+  const benches = [];
+  // the plaza: benches facing the fountain between the stairs, blossom trees in the corners of the terrace
+  for (let i = 0; i < 4; i++) for (const k of [-1, 1]) { const a = DIRS[i] + Math.PI / 4 + k * 0.22, x = Math.sin(a) * 15.6, z = Math.cos(a) * 15.6; at("mhBench", x, z, { rot: faceTo(x, z, 0, 0) }); benches.push(W(x, z)); }
+  // the terrace: benches round the outside of the promenade, lamps, blossom trees between them
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TAU + TAU / 48, near = DIRS.some((d) => Math.abs(Math.atan2(Math.sin(a - d), Math.cos(a - d))) < 0.2);
+    if (near) continue;
+    const x = Math.sin(a) * 28.6, z = Math.cos(a) * 28.6;
+    if (i % 3 === 1) at("mhBlossom", Math.sin(a) * 30, Math.cos(a) * 30, { n: 40 + i });
+    else { at("mhBench", x, z, { rot: faceTo(x, z, 0, 0) }); benches.push(W(x, z)); }
+  }
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU + TAU / 32, x = Math.sin(a) * 21.6, z = Math.cos(a) * 21.6; at("mhLamp", x, z); }
+  // the avenues: lamps both sides, blossom trees and benches now and then
+  DIRS.forEach((a, i) => {
+    const s = Math.sin(a), c = Math.cos(a);
+    for (let d = 36; d <= AVENUE_END[i] - 4; d += 12) for (const sd of [-1, 1]) {
+      const x = s * d + c * sd * 3.3, z = c * d - s * sd * 3.3;
+      if (!parkWalkable(x + CX, z + CZ) || onAnyDeck(x, z)) continue;
+      if ((d / 12) % 2 < 1) at("mhLamp", x, z);
+      else { const bx = s * d + c * sd * 4.2, bz = c * d - s * sd * 4.2; if (parkWalkable(bx + CX, bz + CZ)) { at("mhBench", bx, bz, { rot: a + Math.PI / 2 }); benches.push(W(bx, bz)); } }
+    }
+  });
+  // round the pond and up at the lookout
+  for (const [x, z] of [[-40, 30], [-42, 46], [-58, 54], [-72, 44], [-70, 26]]) at("mhBlossom", x, z, { n: Math.abs(x * z) | 0 });
+  at("mhScope", LOOK.x - 3.6, LOOK.z - 3.2, { rot: Math.PI * 0.75 }); at("mhScope", LOOK.x + 1.6, LOOK.z - 4.6, { rot: Math.PI * 0.95 });
+  at("mhBench", LOOK.x + 3.4, LOOK.z + 1.6, { rot: -1.2 });
+  at("mhKiosk", 40, 8, { rot: -Math.PI / 2, name: "Park Café" }); at("mhKiosk", -8, 40, { rot: Math.PI, name: "Pond Snacks" });
+  at("mhPhoto", 6.5, 40, { rot: Math.PI });
+
+  // where hubdecor puts the pack's trees, bushes, flowers and rocks: off the paths, out of the water, not too close to anything
+  const spots = { cx: CX, cz: CZ, benches, trees: [], small: [], bushes: [], flowers: [], rocks: [], heightAt: parkHeightAt };
+  const r = seeded(4711), free = (x, z, pad) => Math.hypot(x, z) < RING_R + 2 && !inPlace(x, z, 3) && Math.hypot(x - TEA.x, z - TEA.z) > 29 && parkWalkable(x + CX, z + CZ) && !onPath(x, z) && Math.hypot(x, z) > PLAZA + 2 && clearOfStream(x, z, pad) && Math.hypot(x - POND.x, z - POND.z) > POND.r + pad + 1.5;
+  for (let n = 0; n < 900 && spots.trees.length < 120; n++) { const a = r() * TAU, d = 36 + Math.sqrt(r()) * 95, x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z, 5) && Math.abs(Math.hypot(x, z) - 25) > 6) spots.trees.push([...W(x, z)]); }
+  for (let n = 0; n < 600 && spots.bushes.length < 90; n++) { const a = r() * TAU, d = 31 + r() * 80, x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z, 2.5)) spots.bushes.push([...W(x, z)]); }
+  for (let n = 0; n < 800 && spots.flowers.length < 160; n++) { const a = r() * TAU, d = 30 + r() * 70, x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z, 1.5)) spots.flowers.push([...W(x, z)]); }
+  for (let n = 0; n < 300 && spots.rocks.length < 30; n++) { const a = r() * TAU, d = 34 + r() * 90, x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z, 2)) spots.rocks.push([...W(x, z)]); }
+
+  // people: on the promenade and in the plaza, along the avenues, by the pond and up at the lookout
+  const people = [], pr = seeded(23);
+  const areas = [[10, [-24, -24, 24, 24].map((v, i) => v + (i % 2 ? CZ : CX)), 0.3], [8, [-28, -28, 28, 28].map((v, i) => v + (i % 2 ? CZ : CX)), 0.2], [4, [-3, 34, 3, 90], 0], [4, [34, -3, 90, 3], 0], [4, [-90, -3, -34, 3], 0], [3, [-3, -90, 3, -34], 0], [4, [-50, 10, -40, 30], 0.4], [3, [LOOK.x - 4, LOOK.z - 4, LOOK.x + 4, LOOK.z + 4], 0.6]];
+  let n = 0;
+  for (const [count, [x0, z0, x1, z1], still] of areas) {
+    const area = { minX: x0 + (count && x0 === -24 ? 0 : CX), minZ: z0 + (x0 === -24 || x0 === -28 ? 0 : CZ), maxX: x1 + (x0 === -24 ? 0 : CX), maxZ: z1 + (x0 === -24 || x0 === -28 ? 0 : CZ) };
+    for (let i = 0; i < count; i++, n++) {
+      let x = 0, z = 0;
+      for (let k = 0; k < 20; k++) { x = lerp(area.minX, area.maxX, pr()); z = lerp(area.minZ, area.maxZ, pr()); if (parkWalkable(x, z) && Math.hypot(x - CX, z - CZ) > BASIN.r + 1) break; }
+      const s = pr() < still;
+      people.push({ id: `park-${n}`, name: NAMES[(n * 7) % NAMES.length], color: TONES[n % TONES.length], x, z, area, roam: !s, still: s });
+    }
+  }
+
+  return {
+    key: "park", name: "Central Park", outdoor: "bare", freeLook: true, camDistance: 16, far: 1200, spawn: W(0, 40),
+    open: { minX: CX - 112, maxX: CX + 112, minZ: CZ - 112, maxZ: CZ + 112 },
+    layout: { shell: { windowItem: true, window: false, brightness: 1, wallpaper: "none", wall: "#7d9a6a", floor: "hex pavers", sky: "day", house: { w: 64, d: 56, hub: true } }, items },
+    sky: canvasTex(16, 512, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); for (const [p, c] of [[0, "#5d9fd8"], [0.42, "#a9d2ef"], [0.52, "#e3efef"], [0.6, "#e8efe4"], [1, "#d9e4d2"]]) gr.addColorStop(p, c); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, { repeat: null }),
+    fog: [0xdfeae6, 110, 460],
+    light: { hemi: [0xf2f7ff, 0x5c7448, 1.05], sun: 2.5, exposure: 1.0, bloom: [0.9, 0.32] },
+    spots, people, heightAt: parkHeightAt, walkable: parkWalkable,
+    // the camera starts close behind you like every other hub, not on a wide view of the whole park (lifted to the ground you stand on)
+    enter(room) {
+      const ctl = room.controls, [sx, sz] = W(0, 40), gy = parkHeightAt(sx, sz);
+      room.camera.position.set(sx + 0.3, gy + 2.4, sz + 4.6); ctl.target.set(sx, gy + 1.1, sz - 1.4); ctl.update();
+    },
+  };
+}

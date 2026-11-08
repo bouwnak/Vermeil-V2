@@ -1,0 +1,77 @@
+{
+  "format": "unimate-samples/1",
+  "motions_dir": "motions",
+  "runs": [
+    {
+      "exp_dir": "outputs/unimate_uniml3d_f60_v3",
+      "checkpoint": "outputs/unimate_uniml3d_f60_v3\\checkpoints\\checkpoint_step_150000.pt",
+      "cfg_scale": 3.0,
+      "seed": null,
+      "mode": "text"
+    }
+  ],
+  "assets": {
+    "m": {
+      "source": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\xbox_360_sonic-979d05\\asset",
+      "dataset": null,
+      "cond_path": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\xbox_360_sonic-979d05\\asset\\cond.npy",
+      "cond_key": "m",
+      "canonical_glb": "C:\\Users\\akech\\OneDrive\\Desktop\\Application\\Vermeil-voice-gpu-and-setup-fix\\ui\\models\\_unimate\\xbox_360_sonic-979d05\\asset\\m.glb",
+      "stats_dataset": "general",
+      "joint_names": [
+        "Hips_02",
+        "Spine_04",
+        "Thigh_L_091",
+        "Thigh_R_097",
+        "Spine1_01",
+        "Calf_L_092",
+        "Knee_L_096",
+        "Calf_R_098",
+        "Knee_R_0102",
+        "Neck_05",
+        "Shoulder_R_068",
+        "Shoulder_L_048",
+        "Foot_L_093",
+        "Socks_L_095",
+        "Foot_R_099",
+        "Socks_R_0101",
+        "Head_06",
+        "UpperArm_R_069",
+        "UpperArm_L_049",
+        "Toe_L_094",
+        "Toe_R_0100",
+        "Needle_B_C_021",
+        "Needle_B_L_017",
+        "Needle_B_R_025",
+        "Needle_U_R_023",
+        "Needle_U_L_015",
+        "Needle_U_C_019",
+        "ForeArm_R_070",
+        "Elbow_R_088",
+        "ForeArm_L_050",
+        "Elbow_L_067",
+        "Needle1_B_C_022",
+        "Needle1_B_L_018",
+        "Needle1_B_R_026",
+        "Needle1_U_R_024",
+        "Needle1_U_L_016",
+        "Needle1_U_C_020",
+        "Wrist_R_087",
+        "Hand_R_071",
+        "Wrist_L_066",
+        "Hand_L_051"
+      ],
+      "frame_digest": "17a15409a79d2e0f08da45f8714f77fbe903819e"
+    }
+  },
+  "samples": {
+    "m-an_object_walks_forward_with_a_heavy_lumbering-rep_0-0.npy": {
+      "asset": "m",
+      "case_id": "m-an_object_walks_forward_with_a_heavy_lumbering",
+      "prompt": "An object walks forward with a heavy, lumbering monster gait, its body low and its arms held out in front.",
+      "kind": "sample",
+      "run": 0,
+      "frame_digest": "17a15409a79d2e0f08da45f8714f77fbe903819e"
+    }
+  }
+}

@@ -1,0 +1,1492 @@
+# Handover: Vermeil assistant + "AI Dungeon Adventure" game
+
+Paste this whole file into a new Claude conversation, together with the project folder, to continue the work.
+Last updated: 2026-11-08.
+
+---
+
+## 0. Newest work (read this first)
+
+### Round 2 of 2026-11-08: Main Hub and park polish, world editor, the Workshop, the empty-panel bug, startup speed: CHECKED IN THE BROWSER PREVIEW (mock API)
+Backups: `_archive/pre-2026-11-08b/`.
+- **Empty panels (Socialize and possibly others): fixed.** Settings' show/hide ticks carry `data-panel` too, including "adventure", which has no panel. `openPanel` read `$("panel-adventure").hidden` and threw before any panel loaded its content. Now only `button[data-panel]` counts, a missing panel returns early, and every panel's load is wrapped (`showPanelError`: "This part didn't load" with Try again). All 17 sidebar features and their 62 tabs were opened one by one in the preview: each shows content within about 250 ms, with no errors.
+- **Workshop** (from the other version's `shop.py`, now `skills/shop.py`): search returns **every downloadable model in any pose** (`keep_model` no longer needs a T-pose, and "t pose" isn't added to the search). T-pose and A-pose models are still marked. app.py `workshop_status/save_token/search_models/get_model/search_voices/get_voice/library` and the `workshop_progress` event. UI `ui/workshop.js` (loaded on first open) has tabs 3D models / Voices / My models & voices, matching the other version's layout. My tab: a picture of every model (its own renderer, each model freed after drawing) with Use / 🎬 Animate / 🗑 Delete (two clicks), and voices with Listen / Use / Delete (existing `delete_model`, `rvc_delete`). The "🛠 Workshop" button is in Characters; the editor's 📚 My models / My voices buttons open its My tab. mock.js has stand-ins.
+- **Main Hub:** the bridge is railed on every edge and its ends (`railSeg()`: sloped glass rails with posts, a top tube and a light line). Both ramps have glass rails down both sides. The terraces are filled solid under every step, have a white end wall, fascia and light line, and rails at deck height (1.8 m; they used to sit at floor level, buried inside the platform). The plaza's underside is closed. The canyon blades are much thicker (`W*2.1`, thickness `*2.4`).
+- **Central Park:** the camera starts close behind you like the other hubs (`camDistance` 16, no wide establishing shot). Benches tilt to the slope (`tx`/`tz` on the spec, applied in `mhBench` to an inner body; no stretched legs). Benches steeper than 0.3 rad are dropped, and no two benches stand within 2 m. Nooks only go where the ground varies by less than 0.45 m over 3 m, and keep 4.6 m from woods plants. Gate pillars and planters reach down to the ground (rotation-aware `gy`). Pavilion railings now run post to post (they were turned 90° and crossed the floor).
+- **World editor:** every tree, bush, rock and flower clump in the park's woods can be picked on its own (`userData.editable` on the InstancedMeshes; hubedit sub-keys `"pkWoods#0|mesh|copy"` with a proxy node for the gizmo; trunk and crown move together; saved and restored like other pieces). A **↺ "Put it back where it was"** button appears for moved world pieces (`restoreOriginal`, one undo). Copies of hub pieces get readable names ("Bookcase (copy)").
+- **Faster start:** Socialize loads the hub code only when you first enter a hub (`ui/hubinfo.js` holds `OFFICIAL_HUBS`; social.js `hubsJs()`; `go()` takes a promise). The rigger and its exporter load on first use. KaTeX is `defer`. Startup went from 96 to 79 script files. The room draws at about 12 fps while a full-width panel or the Workshop covers it.
+- **Checks:** the collision scan of all 8 hubs is clean (only palm crowns over a sofa and a sandcastle); no console errors in any hub; the Workshop flows run against the mock; the search filter was tested with fake Sketchfab data; the related Python tests pass (64 OK).
+- **Not checked:** real Sketchfab and voice-models.com downloads (no network in the preview; it needs your token); the real app window.
+
+
+### Hubs and main room fix round (2026-11-08): CHECKED IN THE BROWSER PREVIEW (mock API)
+Backups of every file touched are in `_archive/pre-2026-11-08-fixes/`. **The in-game currency is called Lumen** (all user-facing "VCash" labels renamed; code identifiers like `vcash`, `VCASH_PER_XP`, `setMyVcash` were left alone so saves keep working).
+- **Edit room: one "🧱 Layout" tab** (app.js `ROOM_PANES`, index.html `data-pane="layout"`, `renderWallTypes()`): wall colour, floor and the wall types (wallpapers) together. The old Wall colour and Floor tabs are gone and the wallpapers were taken out of Wall decor. An old saved `catalogTab` of `wallcolour`/`floor` maps to `layout`.
+- **Furniture sizes:** every catalog model was measured in the preview (listed size vs rendered mesh vs vertex spread): no broken models, but small things were true-to-life and lost in a 10 m room. `general_asset_pack/furniture.json` now has a per-category minimum (food 0.32 m, kitchen 0.34, decor 0.32, tech 0.3, plants 0.5...), 556 pieces scaled up; `game_tools/build_pack_furniture.py` applies the same floor so a rebuild keeps it.
+- **Main Hub:** the intro plays once ever (`localStorage.mainHubIntroSeen`; `replayMainIntro()` clears it). Walking: WASD 2.0 m/s in the room, 3.4 in hubs, Shift x2.4; click-walk 1.9 / 3.2; walk animation speed follows (room.js `KEY_WALK`, `HUB_WALK`, `SPRINT`).
+- **Portals:** no post or arm any more. The sign floats over the ring (`SIGN_Y` 8.6), turns slowly and bobs, on a thread of light, with a halo; the arrow on the sign is now a down chevron. Every `mhPortal` (also ones placed later with the world editor) gets it. Portal rows `PORTAL_ROWS` keep clear of the skybridge.
+- **Skybridge** widened from 7 m to 16 m (`L.bridge` z -128..-112), round piers in pairs, ramp top moved to match. **Ramp clipping fixed:** the plank surface was tilted the opposite way to its timber bed (`rx: -slope` vs `+slope`).
+- **Boulevard benches** moved onto the wooden lanes (x ±9), off the light dashes. **`mhBench` redesigned:** cast end frames, armrests, rounded slats, reclined back, footings that reach down slopes, and a collider.
+- **Paths joined:** each boulevard lane and steel strip runs on until it meets the plaza's grating ring (r 40-43.5).
+- **Canyon:** the sand platform and dunes are gone; the blades rise from the cloud sea (y -70..-80) and keep their old position at deck level (`geo.translate(-bend*u0^2...)`). The boardwalk is a pier (timber deck, glass rails with a light rope, white piers into the clouds); walkable only inside its rails (|x| <= 5.5); canyon lamps at x ±5.2.
+- **Sun shafts** (`godRayMat`) are 260 m long, soft where they land and dissolving up into the sky (no hard end).
+- **Character vanishing:** the Main Hub arrival shrinks you to 0.001 and remembered `scale` at entry, so entering again mid-arrival kept you invisible everywhere. Fixed in mainhub `enter` (finish the old arrival first, `userData.trueScale`) and room.js `enterHub` (never arrive shrunk).
+- **Central Park:** benches sit at their highest corner (parkplaces `furnishPark`); pack trees, bushes, flowers and rocks keep off seats, nooks, kiosks and lamps; nooks keep away from kiosks, lamps, blossoms and gates.
+- **World editor:** the rings turn freely (hold Shift to step by the turn size). The hub's own pieces can be copied and pasted: `recOf()` in worldedit.js makes a `piece:type#{settings}` record (hubedit `existing.spec`), worldlibrary `makeModel` builds it with its settings and keeps its `update` as `userData.tick`, and `WorldLayer.tick` (called from room.js) animates copies.
+- **Museum:** door signs sit on the door head below the cornice and the picture rail and key band stop around them (no more cornice over "ARTIFACTS"); every wall end is capped with a pilaster and plinth; the signpost moved off the carpet to (2.7, 23.75).
+- **Stalls:** renting worked, but with a stall already rented every other stall was a dead end. Now an empty stall offers "Move my stall here" or "Go to my stall"; Socialize > My stall "Go" walks you to the front of your stall, plus "Set up my stall"; with no stall the panel shows "Rent a stall".
+- **Decor collisions** (hubdecor.js): the dresser now uses each hub piece's own colliders (not a 0.6 m guess), keeps tree crowns apart (`CROWN`, `crowns`), and `around()` and the park's `on()` space things out. Beach loungers skip dunes and palm trunks. A collision scan over all 8 hubs (mesh boxes, ignoring cups on tables and chairs under tables) is down to natural grove spacing.
+- **Library:** herringbone floor and a 36 m green-and-gold runner (hubRug repeats its pattern on long runners).
+- **Sound in every hub (new `ui/hubaudio.js`):** reuses `game/audio.js` (all synthesized). New themes `hub_main`, `hub_park`, `hub_cafe` (swung lo-fi), `hub_library`, `hub_museum`, `hub_arcade` (chiptune), `hub_stalls`; the beach uses `beach`. New ambience scenes `hub_main/cafe/library/museum/arcade/stalls`; the park uses `meadow` with water. Footsteps by ground, an arrival chime, a portal whoosh (`hubsfx` window event). A 🔊/🔇 button on the hub bar, remembered in `localStorage.hubSound`. room.js calls `hubEntered`/`hubLeft`.
+- **Life in the air (new `ui/hubfx.js`):** birds over the Main Hub, park and beach (gulls); light motes in the park, beach, café, library, museum and study; steam off café tables; sunbeams in the library and museum; neon pixels rising in the arcade; drifting petals and swaying banners in the stalls; rattan pendants sway.
+- **Checked:** all 8 hubs load with no console errors; screenshots of the portals, bridge, ramp, canyon, library, museum signs and wall ends, arcade, beach, stalls and a park nook; stall rent and move flows run in the page.
+- **Not checked:** the sounds by ear (no speakers in the preview); the real app window; frame rate on a real GPU with the new effects.
+- **Testing tip:** the preview caches modules. After editing, run `fetch(file, {cache: "reload"})` for each changed file and then reload, or old code runs.
+
+
+### Turtle Farm round 8: evolution as a cutscene (2026-11-07): CHECKED IN THE BROWSER PREVIEW, FRAME BY FRAME BY EYE
+Files: ui/turtle/evolve.js (new), dinos.js (`D.evolve`), audio.js (`duckMusic`, `evoSound`), turtle.css (`.evo-*`). Full suite: 923 tests OK, 5 skipped.
+- **What the owner asked for:** the dinosaur floats, goes fully bright, white beams flash all over, it becomes a bright silhouette of its next form, the flash fades, and the new form is revealed. They sent six frames from an anime evolution as the reference for timing and look. **Our own art, sounds and words only:** no frames, music or phrases from that show.
+- **How it plays** (`playEvolution(G, {from, to, name, form})` in evolve.js, about 11 s, resolves when it ends):
+  - It runs as its own scene through `G.show`, like the showcase. The world is paused, the camera is saved and restored, the music ducks, and `body.evo-on` hides the HUD, the prompt, labels and notes.
+  - **Backdrop:** a full-screen shader quad. Vertical light streaks rising, with soft out-of-focus lights. Rose while it glows, amber while it changes shape, then a burst of sky-blue rays out of a white centre for the reveal.
+  - **0–3.4 s:** it rises off the ground and bobs. A white skin over every part (`shellOf`: a twin of each mesh, bound to the same bones, two-sided) fades in until it is a flat white silhouette, with a soft pink halo and rising motes.
+  - **4.4–6.0 s:** white beams shoot out from the middle, a ragged white burst swallows the screen, and coloured streaks are left in the white. Drawn on a canvas over the game (`flashLayer`).
+  - **6.0–8.6 s:** under the white, the camera moves back to fit the bigger form. On amber, the outline flips between old and new shape, faster each time, with a little pop of growth on every flip. It always ends on the new shape.
+  - **9.2 s:** a last flash, then the sky-blue rays. The new form's white skin fades off to show its own colours, motes fling outward, and it roars. The card reads "{name} became a {form}!".
+  - **11.2 s on:** Space, Enter, E or a click leaves; it also leaves by itself at 14 s. Escape before the reveal jumps to the reveal; Escape after it leaves.
+- **Sound** (audio.js `evoSound`): `rise` (climbing swells and plucks), `flash` (hiss and bright chord), `pulse(k)` (one per shape flip, rising in pitch) and `reveal` (an original fanfare). All are synthesized.
+- **`D.evolve` (dinos.js)** is now async:
+  1. It builds the new body first, so the scene never waits on loading.
+  2. It plays the scene, then swaps `d.char`, adds the saddle and puts the new body at `d.pos`.
+  3. It keeps the popups, `seenDino`, `G.moment("evolve")` and the new-skill popup, and saves.
+  4. `d.evolving` stops a double start.
+  - `D.levelNext` (the instant test button) is unchanged.
+- **Checked in the preview:**
+  - Crestling to Crestback, watched frame by frame: pink glow, pure white silhouette, beam burst, white-out, amber flips, sky-ray reveal, card and leaving.
+  - Crestback to Grand Crestback, and the Escape skip.
+  - After each run: stage saved, new body in the world at the dinosaur's spot, no white parts left behind, pause and HUD restored, no console errors.
+- **Not checked:** the sounds by ear; the scene on a real GPU at full frame rate (the preview was stepped by hand); flyers and swimmers going through it (only the rigged land body was watched).
+- **Testing tip:** the pane only draws inside real animation frames. Stub `requestAnimationFrame`, step with `G.show.tick(1/30)`, and render with `G.renderer.render(G.show.scene, G.camera)` inside the saved real `requestAnimationFrame`.
+
+### Hubs redesign, the Main Hub rebuilt round the beam with an opening fly-in, then additions from 19 more reference frames (2026-11-07): DONE, CHECKED IN THE BROWSER PREVIEW AND LOOKED AT BY EYE
+**Moving to a new device and account.** The folder is now `C:\Users\jpant\Downloads\Vermeil-voice-gpu-and-setup-fix\Vermeil-voice-gpu-and-setup-fix` (not a git repo). Two standing rules lived only in the old account's Claude memory and global CLAUDE.md, so they're copied here:
+- **Auto-resume:** after a context reset, compaction, summary or interruption, carry on with the unfinished task straight away. Don't ask "should I continue?". Only stop for a real new decision that is the owner's to make.
+- **Original art only:** the owner asked for "anime banners" etc. Draw original anime-style art (canvas-drawn); never use existing characters.
+
+**What the owner asked for this round (all done):**
+- The fixes from 11 screenshots:
+  - Main Hub fixes.
+  - Water under the park bridge.
+  - Central Park: varied elevation, more paths, an invisible edge barrier and places to stop and talk, without growing the land.
+  - Stalls: original anime banners and decor; signs no longer read mirrored.
+  - Beach: an animated sea with waves and a barrier.
+  - Museum: a higher ceiling and rooms (art, dinosaur skeletons, artifacts, history).
+  - Higher ceilings in the library, café and arcade.
+  - Every hub redesigned with far more detail.
+- Then: "make the main hub 10000000000000000000x better", from about 30 reference pictures. The beam is in the middle and is where everyone spawns. A white tensile canopy with arched ribs, cables and triangulated seams. Terraces, boardwalk, orb lamps, blossom trees, a bridge, sails, holo ring portals, chevrons, golden haze, a volumetric beam with bloom and lens flare, and an opening animation.
+- Then: "look how the canopy has outlines that glows per user spawn and a glow for it, I want you to redesign it completely" (about 20 reference frames).
+- Last: 19 more reference frames. The owner then said: **"dont rewritte it the new references are just for somethings to add"**.
+  - So this round only ADDS pieces. The board, portals, sails, canopy and the intro path were not rebuilt.
+  - Do not copy any film or game branding from those frames. Use only the app's own names (Vermeil, the hub names, "Hall of Fame", "TOP VCASH", "SOCIZLIGIN").
+
+**The Main Hub now (`ui/mainhub.js`, about 2120 lines, CRLF).**
+- **Layout:**
+  - A glass spawn disc with the beam at (0,0), under a 12-arm white tensile canopy (`buildCanopy`, `CAN` sizes) with a crown ring and triangulated seams.
+  - A vault (`buildVault`) down the boulevard.
+  - The canyon and boardwalk to the south (`mhCanyon`), the skyline (`mhSkyline`), sails, blossom trees, holo ring portals (`mhPortal`) and the leaderboard (`mhBoard`).
+- **Added from the last reference frames (additions only):**
+  - **Petal crown** (`mhCrown`): 14 giant white sail petals in two layers, at r 100-128 round the plaza.
+    - They rise out of the clouds and use their own `membraneMat` (`CROWN_MAT`, emissive 0.42, so they look white from outside too) with glowing edge and spine tubes (`canMats().line`).
+    - They are open to the boulevard (north) and the canyon (south).
+    - The brown spikes you see from the canyon are the canyon's own rock fins, not the crown.
+  - **Blossom air** (`mhAtmos`):
+    - 2400 pink petals that tumble as they fall, and 1200 golden dust motes. Both are `airMat`, points sized in metres.
+    - 12 slanted sun shafts (`godRayMat`) down the boulevard and round the plaza. They must stay strong (factor 1.3, warm colour) or they vanish against the white canopy.
+  - **Sky scoreboard** (`mhDrum`, x 86 on the east terrace, `act: "board"`): a floating drum of two curved screens.
+    - The screens use the same `drawBoard` pages as the Hall of Fame, half a page out of step.
+    - Also: a SOCIZLIGIN marquee round the top, a "HALL OF FAME · TOP VCASH · ALL SERVERS" band, and a turbine underneath (nacelle, cyan ring lights, a chase, a spinning fan, a downward light jet).
+    - On top: a cage and beacon, plus twinkling stars. It bobs and sways.
+  - **Floor:** cyan dashes march round the plaza grating rings and down the boulevard grating lanes (`floorGlowMat`, `dash`). They flare with each arrival.
+  - **Portals:**
+    - **Sign:** each portal now has a green street sign on a white post and arm (`streetSign(name, col)`).
+    - **Ripple:** the surface ripples from where your character stands (`vortexMat` `uRip`/`uRipC`).
+    - **Walking through:** clicking a portal walks you into it. Or walk in yourself; idle wandering doesn't count (same guard as life.js). It flashes in its colour (`portalFlash`, `uFlash`, a sprite) and then travels.
+    - social.js asks `item.group.userData.walkThrough()` first. A call with `through: true` goes straight through.
+    - `HUB_ROOM` holds the room while the Main Hub is open.
+  - **Sails:** rigging added (shrouds to cleats, ratlines, a lift to the yard) and a cyan light ring at the foot.
+  - **Fly-in:** 90 golden cloud sprites banked to the sides of and below the first stretch of the path (`goldenClouds`), so the spire stays in view. They're removed at landing (`dropClouds`).
+  - People: 20 on the plaza and 16 on the boulevard (were 14 and 10).
+  - Cost: the additions take render time from about 25 to 29 ms per frame in the preview (the drum about 3 ms of that).
+- **Arrival glow:**
+  - `BEAM.flare(v, tint)` sets `CAN_U.uTint` to that person's colour (`tintFor(name)`; your own arrival is gold, `YOU_TINT`). It also starts `FX.flare` and `FX.wave`.
+  - `canopyLight(t)` feeds the canopy shaders: the membrane (`membraneMat`) and the outline tubes (`outlineMat`).
+  - The outlines blaze in that colour and a wave sweeps out over the canopy and the floor inlays (`floorGlowMat`).
+  - Pulse rings race up the beam, and a shock ring and a point light fire at its foot.
+  - `hub.arrive(name, room)` does all of this for a real arrival. The hub also fakes one every 14-36 s. `room.onBeaconArrival` shows the "just arrived through the beacon" toast (social.js).
+- **The beam (`mhBeacon`):**
+  - The hard beam and core (`beamMaterial`), chevrons, rising rings and motes.
+  - A volumetric glow (`volBeamMat`): a gaussian column integrated exactly along each view ray (erf via `tanh`), drawn on a radius-10 cylinder. Its front faces carry the glow from outside, and its back faces (without depth test) from inside. Inside it is softer (`uCap` 1.0 and 0.6x boost), so the plaza shows through on the way down.
+  - A lens flare (`makeFlare`): 8 additive sprites strung from the beam's foot through the screen centre. It shows only when the foot is in view from under or near the canopy.
+  - `BEACON_CAM.update(cam)` runs from `hub.tick` after the camera has moved.
+- **Opening fly-in (first entry per page load only; `introSeen`, `replayMainIntro()` re-arms it; Skip button or any key skips):**
+  - 0-2.8 s, deep space: everything is on camera layer 5 (`COSMOS`), so the hub is hidden. A nebula dome, an orange plasma orb with white filaments, 46 converging strands, dust and rings. The camera circles in and falls into the orb, and a white flash covers the cut.
+  - 2.8-11.3 s, the world on a `CatmullRomCurve3` (`FLY`, timed by `monoMap`):
+    - down past the spire and between its holo rings ("THE MAIN HUB" title)
+    - along the canyon boardwalk
+    - up over the canopy
+    - a half-turn spin straight down inside the beam
+    - a pull back to `LAND`
+  - Landing: a flash, a gold flare, the character scales in inside the beam, then walks to (0,-9).
+  - `finish()` restores the camera layers, bloom, fov, polar limits and maxDistance. Checked: all back to normal after the intro.
+- **Test hooks in the page:** `(await import('/mainhub.js')).replayMainIntro()` and then re-enter the hub to replay the intro. To freeze time and step through it frame by frame, patch `performance.now` (see the session's method: `__fake` time).
+
+**How to look at the hubs (browser preview, mock API).**
+1. Start `vermeil-hubs` from `.claude/launch.json` (port 8783), or `vermeil-ui-alt` (port 8776). Both serve `ui/`.
+2. Open `http://localhost:8783/index.html?mock`, wait about 4.5 s, then run this in the page:
+   ```js
+   window.__show = async (k, pos, tgt) => { const {buildHub}=await import('/hubs.js'); __room.enterHub(buildHub(k, k==='stalls'?{}:undefined)); await new Promise(r=>setTimeout(r,5000)); __room.controls.maxDistance=200; __room.camera.position.set(...pos); __room.controls.target.set(...tgt); __room.controls.update(); return __room.cozy.items.size; };
+   ```
+   Then call e.g. `__show('park',[0,40,120],[0,0,24])`.
+3. Other notes:
+   - **Keep the browser pane showing.** When it's hidden, the page draws about one frame a second, so walking and flares look stuck.
+   - Screenshots often time out the first time, so retry. They also lag a frame, so take two.
+   - To step through the intro: before entering, set `const real = performance.now.bind(performance); window.__fake = real(); performance.now = () => window.__fake ?? real(); window.__start = window.__fake;`. Then set `__fake = __start + T*1000` to see time T.
+   - The camera follows your character while it walks (after the landing it walks to (0,-9)). Set `__room.walkTarget = null` before placing the camera.
+   - The console keeps old messages across reloads: compare error IDs before chasing them. The five `computeBoundingSphere(): Computed radius is NaN` lines seen this round were old ones; a fresh load and a sweep of all 8 hubs logged none.
+   - The console error `Failed to resolve module specifier "three"` comes from the early import and can be ignored.
+   - Node isn't installed; Python is.
+
+**How the hub code works.**
+- **Hub object** (from `buildHub` in `ui/hubs.js`, `BUILD.<key>`): `key, name, outdoor ("bare" hides the shell floor), freeLook, camDistance, far, spawn`.
+  - `open` (bounds) and `walkable(x,z)` are used as `cozy.openBounds` / `cozy.openWalk`. **This is how invisible barriers are made:** `walkable` returns false past an edge.
+  - `heightAt(x,z)`: a rise over 1.1 m acts as a wall.
+  - `layout.shell.house {w,d,h,hub}`: `h` is the ceiling height. The default is `H = 3.2` in cozyroom.js, and room.js uses `house.cfg.h || H`.
+  - Also: `sky, fog, light {hemi,sun,exposure,bloom}, spots, people, enter(room), leave(room), tick(dt,t,room)`.
+- **Catalog items:** `P(label, make(group, spec, ctx), extra)`. `make` returns `{update(t, dt)}`. Extras: `colliders: () => [[x0,z0,x1,z1]]` (relative to the item), `flat, walk, stay, act, info, edit, seat, defaultY`.
+- **`Kit`** (mainhub.js) merges geometry per material: `add(geo, mat, {x,y,z,rx,ry,rz,s,sx,sy,sz,uv})`, `box`, `cyl`, `into(group)`. Give a material `userData.noShadow = true` to stop it casting shadows.
+- **mainhub.js exports** `Kit, canvasTex, mainMats` (white, metal, timber, led, edge, pinks, bark, planks, sail, halo, haloWarm, tex.glowDisc…), `MAIN_FX` (`FX.flare` 0..1 on each arrival, `FX.wave`), `MAIN_CATALOG`, `mainHeightAt`, `mainWalkable`, `replayMainIntro`.
+- Central Park is `ui/parkhub.js` (`PARK_CATALOG`, `centralPark()`; hubs.js merges the catalogs and sets `BUILD.park`).
+- Pack trees, rocks and so on are placed by `ui/hubdecor.js` (`DRESS.<key>`, the `Dresser` put/at/scatter, `MAX_HUB_TRIS` 900k) at the `spots` a hub hands over.
+- **Shader rules learned the hard way:**
+  - Never `pow()` a negative base; square it instead.
+  - Clamp `1-dot` before a `pow`.
+  - Guard zero-length normals.
+  - A NaN in a shader shows as a black box under bloom.
+  - Ribbon water needs `DoubleSide`.
+  - GLSL `smoothstep(a,b,x)` with a > b is undefined, so write `1.0 - smoothstep(b,a,x)`.
+  - The composer's OutputPass tone-maps (ACES) the whole frame whatever a material's `toneMapped` says, so very bright colours wash to white. Keep glow colours saturated and let bloom do the rest.
+
+**Checks this round:**
+- All 8 hubs (main, park, cafe, library, museum, arcade, beach, stalls) load with no console errors or warnings.
+- The intro was stepped through frame by frame from deep space to landing, and arrivals were looked at from the plaza.
+- Full suite after this round: 923 tests OK, 5 skipped.
+- Not tried in the real app window, only the browser preview with the mock API.
+- The old `ui/parkhub.js.bak` and `ui/parkhub.js.pre-places.bak` turned up again and were moved out of `ui/`.
+- This round:
+  - The fly-in was stepped through frame by frame; the spire stays in view with the clouds at its sides.
+  - Each addition was looked at by eye.
+  - The portal walk-in was tested: the flash comes, then the move to Central Park about 1 s later.
+  - All 8 hubs reloaded with no console errors.
+
+### Turtle Farm round 7: full towns with their own shapes, layered VFX, livelier characters (2026-11-07): CHECKED IN THE BROWSER PREVIEW, AND LOOKED AT BY EYE (all six towns from above)
+Files: ui/turtle/towns.js, houses.js, world.js, data.js, vfx.js (rewritten), assets.js, player.js, life.js. Full suite: 923 tests OK, 5 skipped.
+- **Standing rule (user):** every town must have its own layout and must never look empty. Screenshot every town from above before calling town work done.
+- **No empty sides (towns.js `planTown`):**
+  - The town's level ground is grown *before* the ring infill, so ring lots are no longer refused as "high" on the old slope. This was the main cause of the bare inland half in Coralcrest.
+  - A new pass splits the town into 8 sectors. Any sector with fewer than 3 lots gets a lane: a boardwalk in Mirewalk, a straight street in Hoarshell, a climbing lane elsewhere. Each lane is lined with houses, is undone if no house fits, and in Willowmere and Coralcrest ends in a well.
+  - New helpers: `climb()` (a lane that follows the hillside with per-segment road heights) and `arcRuns()` (a back crescent behind Coralcrest's harbour).
+  - Lots now: Coralcrest 35, Emberback 27, Sunback 43, Hoarshell 40, Mirewalk 35, Willowmere 41.
+- **Each town its own shape:**
+  - Plaza shapes: square in Hoarshell, oval in Sunback, round elsewhere.
+  - Plank deck instead of cobbles in Mirewalk (`deckBoards()`).
+  - Ring infill: a square block in Hoarshell, a stretched oval in Sunback, loose and tilted in Willowmere and Emberback.
+  - A ground-cover pass (grass, clover and flowers where lush, pebbles and rocks where dry or snowy) fills the bare earth between houses. It is instanced, so it's cheap.
+- **Things that looked out of place:**
+  - Town houses outside Willowmere use the per-town house look (`houseBatch`) instead of the raw pack colours.
+  - Stone is recoloured per town: `STONE` in houses.js, so the Coralcrest Bell Tower is sandy stone.
+  - The Emberback silo uses basalt and roof red.
+  - Fixed the Sunback cactus flower path (`CactusFlower_`).
+- **VFX (vfx.js rewritten, same API `burst/item/tick`, so all ~100 call sites upgrade at once):**
+  - Two particle pools: soft paint, and additive glow for sparks, gold, magic and embers.
+  - Per-kind behaviour (`FEEL`): drag, swell or shrink over the particle's life, flutter and tumble for leaves and petals, soft puff shapes for dust and smoke, star sparks.
+  - Bigger bursts (scale ≥ 0.5) add layers (`EXTRA`):
+    - 3D debris chips for wood, stone, soil and chain, which spin, bounce and settle;
+    - expanding shockwave rings on the ground;
+    - an additive light flash.
+- **Animation:**
+  - **Player:**
+    - leans into turns and forward when sprinting;
+    - squashes on a hard landing and stretches on the way up;
+    - walk and run clips play at the speed you actually cover ground, so there's no skating on slopes or along walls;
+    - the head and chest turn toward a townsperson within 5.5 m (`lookAt()` in assets.js);
+    - small footstep puffs on sand, desert and snow.
+  - **Townsfolk:**
+    - each has their own idle rhythm and a random start time, so a crowd isn't in sync;
+    - their walk clip is matched to their pace;
+    - they look at whoever they're chatting with, or at you as you pass;
+    - they sometimes wave when a chat starts.
+  - The T-pose NPC seen earlier was an artefact of the stubbed test loop. In the live game every townsperson has a running clip (checked: 0 of 30 stuck).
+- **Not checked:** frame rate on a real GPU with the denser towns and ground cover; the jump stretch and landing squash by eye (only checked as numbers).
+
+### Turtle Farm round 6: nicer-looking lands (waterfalls, Mirewalk, white trees, paths, clouds, shop doors) (2026-11-07): CHECKED IN THE BROWSER PREVIEW, AND LOOKED AT BY EYE
+- **White trees and plants are gone everywhere.** They came from one converted pack (`conv_textured_fantasy_nature/`) whose textures were lost. `wilddata.js` no longer uses that pack; every biome that used it now uses textured trees, bushes, flowers and mushrooms from the other packs. As a guard, `assets.js` has `blank(g)`: a model whose materials are all plain light grey (no texture, no vertex colours) is treated as having lost its colours. `forest()` then skips it and warns once in the console ("[turtle] model has lost its colours, not used:").
+- **No clouds.** The floating cloud blobs are removed from `world.js` (sky clouds), `weather.js` (the storm deck) and `explore.js` (Mistcrown's peak clouds). The empty `W.clouds` list and the tick loop over it are harmless.
+- **Waterfalls follow the ground** (`waters.js`).
+  - The river surface is draped onto the terrain and only ever runs downhill (`surface()`), so a steep drop is a rocky cascade down the slope instead of a frozen sheet in the air.
+  - Steep stretches (`steep()`) get white water, boulders on both banks and some mid-stream, and a little mist at the foot.
+  - The separate plunge ponds are gone; only the lake at a river's end stays.
+  - `rv.drops` is still kept for the waterfall sound.
+- **Stone paths lie on the ground** (`explore.js`).
+  - `pave()` lays a strip of flagstones that follows the ground point by point, each stone its own shade, with a few edge stones missing.
+  - `dryRuns()` keeps paving off the sea.
+  - Used for the great city's ring and streets and for Pillarback's four streets, which wander slightly instead of running ruler-straight.
+  - Note: the triangles must be wound A,B,C / B,D,C or they face down and vanish.
+- **Shop doors:** the timber rail at the top of the low wall no longer runs across the doorway (that was the "floating wood"). Each shop also stands on a stone footing with a broad step at the door, so a shop on a slope never shows a gap underneath (`shops.js`).
+- **Mirewalk is filled out** (`towns.js`, style "boardwalk").
+  - The town's level ground is spread out first (as far as the hill allows), so houses are planned on the ground they'll really sit on.
+  - Narrower boardwalks branch off the main walk wherever there's room (at least 24 m apart on each side). They lean round the old houses and wander out over the marsh, following the ground instead of being levelled. There are up to 9 of them.
+  - Houses go along all the walks with uneven spacing, setback and angle (`lotsAlong`'s new `loose` option; `endLot` takes `loose` too), so they look built over time rather than stamped out.
+  - Result: Mirewalk went from 4 lots to 18, with all 4 of its shops. Other towns are unchanged; `loose` defaults to 0 and `street()`'s new `level` defaults to true.
+- Looked at by eye: the shop entrance (Willowmere), the Hoarshell cascade, Pillarback's paving, and Mirewalk from above and at ground level. The pale stone houses in Mirewalk are the pack's own sage-grey stone model in full sun, not missing textures.
+
+### Turtle Farm round 5: walk-in shops with named shopkeepers and regulars in every town (2026-11-07): CHECKED IN THE BROWSER PREVIEW, AND LOOKED AT BY EYE (Willowmere)
+- **New `ui/turtle/shopdata.js`**: every town has its own 3 shops (tavern/bar, florist, bakery or teahouse), each with a named keeper, a few named regulars (own lines of dialogue), unnamed extras, a menu of drinks/food and what it sells. Example: Willowmere has the Shell & Barrel (Hollis, Old Tam, Juniper), Petal & Pot (Daisy) and Warm Crust Bakery (Bun). Pure data, no pack paths.
+- **New `ui/turtle/shops.js`**: `buildShop` builds a real room on a town lot (floor, rug, walls with a door gap, windows, roof, painted sign, lanterns) and fills it per kind: bar with bottle shelves, keg, stools and tables; plant shelves and big potted plants; bread shelves and display tables; tea tables. `shopPeople` places the keeper behind the counter and guests at tables; tavern/teahouse guests hold a mug (in the right hand or wrist bone) and take a sip now and then; they turn to face you when you talk. `makeShops` hides the roof and the wall between camera and player while you are inside and moves one shared warm light to the nearest shop.
+- **Buying**: talking to a keeper opens their shop (`SHOPS["<town>_shop<i>"]` in data.js). Drinks and food cost money and give energy; florists also sell garden plants that go to your build menu.
+- Town lots: `towns.js` places shops first on lots up to 60 m (plus street width) along a street. Any shop still without a lot then takes over a house lot, set back 1.8-4.8 m further from the street so the bigger room fits (the house's own footprint is left out of the fit check, and its levelled ground moves with it). All 18 shops now get a lot (checked: 3 in each of the 6 towns, including Mirewalk's Mossy Pots and Coralcrest's Sweet Reef).
+- Visual-art pieces come from `SHOP_KIT` in wilddata.js (fantasy_props_megakit, pack_house_plants_set, pack_baked_goods).
+- Tests: 923 run, OK (5 skipped).
+
+### Turtle Farm round 4: a way out of caves, livelier caves, random cave mouths in sensible places, a different street plan for every town, with stairs up to walled terraces (2026-11-07): CHECKED IN THE BROWSER PREVIEW, AND LOOKED AT BY EYE
+Files: ui/turtle/towns.js (rewritten), cave.js, explore.js, main.js, ui.js, index.html, turtle.css, life.js, waters.js, wilddata.js (TOWN_KIT.flowers). Full suite: 923 tests OK, 5 skipped.
+- **Leaving a cave:** besides the rope at the light shaft, R (the ride key) or the gold "☀ Climb back out (R)" button at the top of the screen takes you out from anywhere in the cave. R does nothing while a conversation is open, like every other key.
+- **Caves look better:** a rope ladder and dust in the light shaft, glow-worms on the roof that slowly pulse, Shellwright wall lamps with flickering flames along the long tunnels, and darker fog that matches the rock.
+- **Cave mouths:** each mouth is one of five kinds, picked at random but always the same for that spot (arch, cleft, overhang, Shellwright doorway with braziers, old mine with timbers). Opening size, boulders, moss, snow and crystals vary too. Only the Deep Hall mouth on Hollowshell is fixed (it needs verse v3). The others go where `mouthSpot` finds a real hillside: a slope with rock behind it, low walkable ground in front, away from water, roads and towns.
+- **Towns (towns.js), each its own plan (`STYLE`, chosen by town name):**
+  - **Willowmere:** three winding lanes out into the fields, each ending in a well or gazebo close, plus an upper town on the hill up a stone stair (Bell Tower between two houses).
+  - **Sunback:** a long main street through the market, plus a walled kasbah terrace with the Inn.
+  - **Hoarshell:** cross streets in a grid.
+  - **Mirewalk:** a long plank boardwalk winding through the marsh.
+  - **Coralcrest:** a harbour crescent with houses on both sides and benches facing the sea, inland lanes, and a terrace up behind.
+  - **Emberback:** two walled terraces up the volcano, joined by a switchback stair, plus lanes along the foot.
+- **How towns are built:** terraces are flats with `wall:true` (a sharp edge in terrain.js), with stone retaining walls, a parapet and buttresses. Stairs are sloped roads (`stair:true`, about 1 in 2.2, so they're walkable) with steps, side walls, newel posts, lamps and a signpost. Every house lot gets its own levelled ground, faces its street, and has a fenced front yard with flowers, things by the door and a yard tree. Lamps run along every street. The old town houses now use the same village kit. `cfg.quarter` now also has `extent`, `walk` (where folk stroll in the afternoon), `zones` (kept dry of rivers) and `plan`. `plan.why` / `plan.cut` say why lots or streets were dropped.
+- **Not checked:** walking up every stair in play (only by eye); frame rate with the bigger towns on a real GPU.
+
+### Turtle Farm round 3: half-size turtles, flippers, one look per town, rivers/ponds/waterfalls, ecosystem, 5 cave maps, cozy farm/VFX/SFX/UI, a story part for every dinosaur (2026-11-07): CHECKED IN THE BROWSER PREVIEW, AND LOOKED AT BY EYE (see "Visual check" below)
+Files: ui/turtle/data.js, turtlemodel.js, wilddata.js, life.js, biomes.js, creatures.js, towns.js, waters.js (new), terrain.js, world.js, wildlife.js, explore.js, cave.js, farm.js, vfx.js, audio.js, main.js, dinos.js, ui.js, turtle.css; tests/test_turtle_island.py (new `LivelierTurtles`, 38 turtle tests OK).
+- **Size:** every turtle is half its round-2 size, with everything on it kept (towns, trails, carvings).
+- **Turtle model:** the four loose legs are now sea-turtle flippers (long swept front pair, short round back pair) joined to the shell.
+- **Towns:** `TOWN_FOLK` / `townModel(id, i)` in wilddata.js: each town turtle uses one model set (Sunback: cowboys and townsfolk, Hoarshell: cube folk, Mirewalk: RPG heroes, Coralcrest: cute citizens, Emberback: animated men and women), Willowmere keeps the player's outfits. Folk stop at doors and gather spots (towns.js), so the towns feel lived in.
+- **Water (waters.js):** `planWaters` lays rivers from the hill to the sea, ponds, and waterfalls where a river drops (`drops`). `carve` cuts the ground; `wetness(W,x,z)` is 0 in water, 1 when clear; `drawWaters` draws them; lava on Emberback.
+- **Ecosystem (wildlife.js):** many more animals, in herds. They roam, graze, go to the water to drink, sleep at night, flee from you (or hunters), and hunters chase (no killing). Pond fish (`POND_FISH`, conv_cute_fish_pack) and fireflies over water after 18:00.
+- **Caves:** cave mouths are now natural hillside outcrops (`E.caveMouth`, explore.js), placed away from water and clutter. Entering picks one of 5 maps (`CAVE_MAPS` in cave.js: warren, spiral descent, crystal cathedral, sunken stream, honeycomb), much deeper (down to about -53 m).
+- **Cozy pass:** farm.js soil is now bevelled beds with furrows (hoed) or a mound (planted), dry/fed/wet colours and a wet sheen, a pulsing corner-bracket marker, and a golden sparkle "ripe" badge. vfx.js: sparkle, petal, harvest, ripple, ember kinds; particles fade and shrink. audio.js: softer dig/water/plant/pick, a warm pad and echo under the music, river and waterfall sounds that rise as you get close (`setWater`, driven in main.js). turtle.css: a "cozy layer" at the end (honey-wood toolbar, glowing selected slot, shining stamina bar, key badge in the prompt, plump buttons).
+- **Story:** `DINO_ROLES` (data.js): each of the 30 dinosaurs keeps one note of Tarn and Oma's song and has a part in the legend. Befriending a new kind makes Vermeil tell you its part (`D.chorus` in dinos.js). `CHORUS` rewards at 3/6/10/15/20/25/30 kinds. The dinosaur book page shows each one's part and a Chorus bar.
+- **Visual check (2026-11-07, by eye in the preview), and what it fixed:**
+  - Farm (farm.js): ripe crops were huge (models scaled by height only, and the "_Crop" model is the picked fruit). Now every crop is capped in width too (`put(path, size, dy, wide)`; trees get more room), and a ripe crop is drawn as the grown plant with its produce at its foot. The ripe badge sits just above the plant's real top and is bigger (size 1.8, gently pulsing).
+  - Water (waters.js): `carve` now cuts rivers first and ponds last, and lets the river cut through a pool's low rim. `pondMesh(p, look, land)` drapes the pool's edge onto the ground, so a plunge pool on a steep slope spills into the river below instead of hanging in the air as a flat slab (was very visible on Emberback's lava falls).
+  - Cave mouths (explore.js `E.caveMouth`): the arch boulders sit outside the doorway by their own size, so the opening stays clear and dark. The dark backdrop is pinned to the mouth floor (no longer lifted by the hill), a dark floor runs back into the hill, the inside glow is softer, no ferns grow in the doorway, and each mouth adds two `L.keep` circles so trees aren't scattered in front of it.
+  - Looked right with no change: farm beds, furrows and colours, the marker, the `E` key badge, toolbar, talk box, Willowmere's waterfall, lava rivers, the inside of a cave (lantern light, crystals, tunnel), the dinosaur book with each kind's part and the Chorus bar, the busy jungle (herds, path stones).
+  - Still not checked: the new sounds by ear, and all five cave maps one by one (one was entered).
+
+### Turtle Farm round 2: every turtle 10x, new turtle model, medieval towns with lamps, Tarn and Oma story, night vision, "Draw turtles" setting (2026-11-06): CHECKED IN THE BROWSER
+Files: ui/turtle/towns.js (new), world.js, terrain.js, data.js, ui.js, quests.js, main.js, turtlemodel.js, wilddata.js (TOWN_KIT); tests/test_turtle_island.py (`TownsAndStory`, 31 turtle tests OK).
+- **Size:** `GROW = 2.15` (data.js) now applies to every turtle (farm, Willowmere, the five town turtles, explorers), the same "10x" as the explorer turtles (about 2.15x length, about 10x volume). The near ring (`NEAR_RING`) was widened to fit.
+- **Turtle model (turtlemodel.js):** the low-poly reference look, with many more triangles. Island turtles swim with the head and legs under the sea (`sink`), never poking out. Each turtle has its own colours and `age`/`mood` (personality) in data.js.
+- **Towns (towns.js):** `planTown(cfg)` widens each town's flat ground and lays a ring street; `dressTown` puts two rows of medieval village houses (door facing the square) round it, landmarks (Inn, Bell Tower, Blacksmith, Stable, Mill, Gazebo), props by doors, yard trees, market stands where roads meet the ring, a well, and lamp posts every 15 m that glow at night. `lightRoads` puts lamps along the farm's roads. Each town's hill was moved out so the carving trail leaves town cleanly. Trails start past the ring (`cfg.hubR`), and the ring street is ignored by `roadNear`, so paths no longer swirl.
+- **Story (data.js):** Tarn is your farm turtle (husband); Oma carries Willowmere (wife). 12 arcs: farm, bridge, Tarn and Oma, then Coralcrest, Sunback, Mirewalk, Hoarshell, Emberback in order, the Elder, the broken song, the verses, home. New carvings c6 (Coralcrest, the wedding) and c7 (Emberback, the fire and the Elder). A person in every town (Tilly, Mara, Luma, Ferra, Fen, Ona, Cole) tells their piece and sends you to the next turtle. Old Moss's chart tale now needs c7.
+- **Test tools:** "🌙 Night vision" (brighter light, haze pushed back, green goggles tint). "Finish this story step" works for the new steps through each step's `cheat`.
+- **Settings → Draw turtles:** All of them / The one I'm on and the nearest / Only the one I'm on (`G.s.opts.render`). Tarn and Oma count as one while the bridge joins them. Checked: "on" hides the other 15 turtles, "near" shows home + Willowmere.
+- **Open:** two unexplained 404s in the console at load (every game model loads OK; source not found, may be old). If the owner meant 10x length, not volume, raise `GROW`.
+
+### Turtle Farm round: sidebar, furniture previews, chibi turtles, giant explorer turtles, caves + lights, ancient city (2026-11-06): CHECKED IN THE BROWSER PREVIEW ONLY
+Files: ui/turtle/cave.js (new), explore.js, world.js, main.js, wilddata.js, data.js, turtlemodel.js; tests/test_turtle_island.py (`FarTurtles`, 25 tests OK). Full suite: 910 tests OK, 5 skipped.
+- **Done earlier this round:** sidebar shows every ticked item (may need an app restart; Music only shows when its plugin is installed), every main-room furniture piece has a model preview, turtles use the chibi reference model (terrain.js re-exports `makeTurtle` from turtlemodel.js), denser maps with trails (`onTrail`), explorer turtles much bigger, turtles in different colours and ages.
+- **"10x bigger"** was done as about 2.15x in length, which is about 10x in volume. Say so if the owner meant 10x length.
+- **Caves (ui/turtle/cave.js):** every featured explorer turtle has at least one cave mouth (Hollowshell has 5; the Deep Hall one needs verse v3). Press E at a mouth ("Go into the cave"): the screen fades and you are in a dark cave built far away at (16000, 16000), themed per turtle (`CAVE_THEMES`: rock/floor/glow colours, loot, prize; catacomb on pillar, pool on reef, mushrooms on fernwood and bloom). Chambers and tunnels, stalagmites, stalactites, crystals ("Chip off ..." once a day, `s.caveTook`), a deep-chamber Shellwright chest opened once (`s.caveChest`: prize, relic, 150 shells). "Climb back out" at the light shaft. Saving inside stores the cave mouth position. world.js `lands()`, `groundAt` and `nearest` switch to the cave while `G.world.cave.on`.
+- **Lights (`LIGHTS`):** flashlight (best), lantern, torch (flickers, one burned per trip); all have bench recipes. The best one you carry is used automatically; without one the cave is nearly black.
+- **Ancient city:** `greatCity(L)` in explore.js, run at the end of `city()`: ring avenue, 8 paved streets, districts of roofless overgrown houses, stepped temple with a lit shrine, aqueduct, city wall with gate towers, fallen columns. `L.avoidAt` keeps flora off buildings.
+- **Red trees fixed:** they were megakit TwistedTree (autumn leaves). Removed from pillar flora (data.js), the wilddata "Ancient city" list and the city code; thorn keeps a few.
+- **Not checked:** frame rate on a real GPU with the bigger turtles and city; the real app window; playing a full cave run without test flags. The browser-preview save had test flags set (localStorage only, not the real save).
+
+### World editor (2026-11-05, reworked 2026-11-06): TESTED IN THE BROWSER PREVIEW (mock API), NOT IN THE REAL APP WINDOW
+Files: ui/worldedit.js (panel, placing, brushes, scatter, platforms, holes, save), ui/worldsculpt.js (terrain + holes), ui/worldlayer.js (edits, platform shapes and drawn textures, store), ui/worldlibrary.js (all models, categories, scatter sets, glowing portal), ui/hubedit.js, ui/turtle/farmedit.js, skills/worldedits.py. Tests: tests/test_world_edit.py (22). Full suite 6 Nov round 3: 903 tests OK, 4 skipped. Full suite: 895 tests, OK, 4 skipped.
+- **Owner's 6 Nov asks, all done:** the top bars are gone. The cut-off dropdown is now a full-width category select (`CATEGORIES`, `categoryOf`: pack rules, then catalog `role`, then name words) plus pack and search. The assets box (black) fills the side down from the red terraform box, and `fit()` lays out as many rows as fit. The sidebar, chat, HUD and talk guide are hidden while `body.world-editing` (social.css). The farm is its own page with no sidebar.
+- **Placing works like main-room furniture:** click places and selects (Shift+click keeps placing). Drag the thing to slide it over the ground (`startSlide`). Arrows and rings show together (UniMate style; `startGizmo`). There is a gold `BoxHelper`, and a floating bar under the selection (`.we-float`: Scale, X/Y/Z turn axis, ⟲ ⟳, To ground, Copy, Remove). Snap is per axis with a step, plus a turn step. Fly down is now Q/C, because Shift means keep placing.
+- **Scatter brush** (`scatterAt`): count 1-80, spread, circle or square, size, vary, random turn. Quick sets are `SCATTER_SETS`, and `NOT_PLANT` keeps grass floor tiles out. Clicking tiles toggles them (green). A stroke is one undo.
+- **Platforms:** box, cylinder, ramp, stairs, sphere (`SHAPES`), each with a size per side, and covered by `MATERIALS` colours or `SURFACES` canvas textures (no files). Presets: Wall, Floor, Pillar, Steps. You can stand on them (`shapeTopAt`). Making one taller keeps its bottom.
+- **Hole tool:** circle, square, diamond, triangle, star (`HOLE_SHAPES`), dug to a depth or right through (`HOLE` = 255 mask, triangles skipped). R turns the shape. Restore fills holes back in.
+- **Adventure models:** they were already in the catalog as pack `made`, now shown as the Adventure category. Added `fx:portal` (Portal_Base.glb plus the swirl shader).
+- **Hubs:** Shift sprints (2.3x, walk clip at 1.8x speed). Space jumps (v 4.4, g 13, about 0.7 m), which lets you climb rises up to 1.1 m plus the jump height. Drops over 2.5 m (holes) block walking.
+- **Main room camera:** `_roomView` uses the room's x centre and backs off with its size. `_houseChanged` tweens to it 250 ms after a resize, outside edit mode, hubs and the gym. Checked: width 10 to 20 m and back.
+- **Checked in the preview:** placing, sliding, arrows, rings, scatter (12 grass in one undo), a star hole right through with undo and redo, sprint, jump, camera refit. Farm editor checked in round 3. Not checked: frame rate with big scatters.
+- **Owner's later 6 Nov asks (round 3), all done and checked in the preview:**
+  - *Camera:* `_viewLost()` (target over 1.5 m outside the room, too high or low, or too far) and `_keepRoomInView(t)` (once a second outside the diorama, hubs, gym, edit mode and the world editor) tween back to `_roomView()`. `leaveHub` refits when the room was resized while away (`_hubHome.size`) or the saved view is lost. `_houseChanged` also refits on first load when the room isn't the 10 x 8.5 default.
+  - *Sideways holes (tunnels):* the hole tool has Dig down / Right through / ↘ Sideways. Sideways makes a `kind:"tunnel"` rec (`digTunnel`: from the clicked point the way the camera looks, Tilt down -30..89 degrees, Length 1-80 m, any hole shape). worldsculpt.js discards terrain pixels inside up to `TUNNEL_MAX` = 12 tunnels per zone (uniform arrays, `setTunnel`/`dropTunnel`, state in `this.tun`, not on the rec) and `at(x, z, near)` gives the tunnel floor to hub walking (`c.baseY`). worldlayer.js draws the inside (`tunnelGeometry`, darker deeper), hiding wall that sticks out above the ground (`tunnelHeights` float texture). Tunnels move, turn, undo, copy like other things; Width/Length in the red box when one is selected.
+  - *Ctrl+click many, Ctrl+C / Ctrl+V / Ctrl+D:* `S.more` holds the extra picks (green boxes), `group()`, `follow()` moves and turns them with the first; one undo for the group. The clipboard is in localStorage `vermeil.worldEditClipboard`, so it pastes into any world (hub or farm), at the mouse; Ctrl+D pastes next to the originals. Originals of a world can be selected with the group but only your own things are copied.
+  - *Folding:* Terraform and Assets each have ▾ Hide / ▸ Show (`head()`, saved in `vermeil.worldEditFold`). With Terraform hidden the assets box grows up to the top.
+  - *Dropdowns:* the category and pack lists are now custom `dropdown()` buttons whose `.we-menu` is `position:fixed` in the editor root, so nothing covers or clips them (arrows, Enter, Esc work).
+  - *Every world gets every change:* hubs and the farm both run the same ui/worldedit.js + worldsculpt.js + worldlayer.js, and were both checked (farm: dropdowns, folds, Ctrl+click 2 crates, Ctrl+C/V, one undo, a sideways tunnel).
+  - *Farm button:* "🌍 Edit this world (terrain, models, holes)" is now the first, gold, full-width button in ⚙ > 🧪 Test tools (it was number 35 of 47). Guests on someone else's farm don't get it.
+- **Known limits:** terrain is a height map (no overhangs or caves). Farm originals can only be removed; hub originals can also be moved. Edits stay on this device. The model categories come from names and roles, so some will be wrong. Tunnels: max 12 per zone; they hide terrain only (models in the way stay); the farm player can't walk into them yet (terrain.js `ground()` calls `sculpt.at(x, z)` without `near`), only the hub player can.
+
+**General asset pack: `ui/game/assets` renamed, 45 zips imported, duplicates removed, 1,566 new room pieces, hubs dressed, farm world filled, a pack dropdown and grid in all three test features (5 Nov).** Full suite: 881 tests, OK, 4 skipped. UI checked in the browser preview only (mock API), not in the real app window.
+- **Rename:** `ui/game/assets` -> `ui/general_asset_pack` (underscores, because it's part of web addresses). `plugins.migrate_asset_folder()` moves an old install's folder at startup in `app.py main()`. The plugin id and pack stay `adventure` / `game_assets`, so **uninstalling Adventure takes the room's pack furniture, hub decor and the farm's models with it**: the owner may want it split into its own plugin.
+- **Import:** `game_tools/import_packs.py` + `blender_import_worker.py` unzipped `Desktop\here` (scratch copy, not in the project) and converted to glTF: 2305 of 2307. Failed: `pack_animals/MACOSX.glb` (Mac junk), `pack_pirate_kit/Rocks_5.glb`. `modular_scifi_megakit/Decal_Line_90.gltf` is broken (missing .bin). **No zip has licence text: licences are unverified.** Some names look like other people's characters (`MS_Gundam_RX_78_2_with_weapons`, `Mickey_Mousn_t`, `Toad_Ripoff`, `Pokecat_in_Garden`) or are rude (`Fucked_up_little_alien_guy`, `fucked_up_baby`, `Burn_Victim`). None is used in hubs or the farm; they can show up on the grids.
+- **Duplicates:** `scan_models.py` + `blender_scan_worker.py` scanned 5678 models in Blender; `find_duplicates.py` applied: 450 sets, 494 extra copies, 496 files. **They went to the Windows Recycle Bin, not permanent deletion: the owner has to empty it themself.** `aliases.json` maps old id -> kept id; `ui/game/assets.js` and `game/content.py` read it, and `Content.match` skips the old names so a pool never counts one twice. Lists in `data/game/duplicates*.`. Catalog: 5184 models.
+- **Room:** `game_tools/build_pack_furniture.py` -> `furniture.json`, 1566 pieces sized by rules; `ui/packfurniture.js` merges them into `CATALOG`. Rerun after any pack change.
+- **Hubs:** `ui/hubdecor.js`, `dressHub` in `ui/hubs.js`. Items: beach 125, library 111, arcade 67, museum 60, stalls 88, park 231, study 23. Each was looked at in the preview.
+- **Farm:** lists are all in `ui/turtle/wilddata.js` (`WILD`, `FLYING`, `SEA_LIFE`, `GIANTS`, `TOWNSFOLK`, `MORE_FLORA`). `ui/turtle/wildlife.js` brings animals when you're near a turtle (not while paused) and moves them only when close. Ambient dinosaurs are decoration, separate from the tamable `HERDS`. `plant` in `world.js` grows `MORE_FLORA` on its own random run, so existing trees don't shift and felled ones stay felled; none under snow. 9 new catchable fish with path models (`fishPath`). One in three townsfolk uses `TOWNSFOLK`. Static animals hop or sway because they have no walk clip. Roughly +15-20% triangles on home: **frame rate on a real GPU not measured**. Only home and Willowmere planting and home's wildlife were looked at.
+- **Test features:** shared `ui/packbar.js`. Main room: `ui/app.js` panel + `ui/furnfloor.js`. Farm: `testTools` in `ui/turtle/ui.js` + `showcase.js` kind `packs`, plus new rows on the two existing floors. Adventure: new row in `drawTestPanel`, `ui/game/testfloor.js`, engine call `game_used_packs` (`Content.used_by_pack`). Adventure uses 66 packs and none of the new `pack_*` ones; nothing in its pools changed, so no static model can become a monster. The grids themselves were opened; the farm and adventure panel buttons weren't clicked in a real game with test mode on.
+- **Left alone:** `ui/dnd_furniture.js` is unreferenced and could go. Raw `dnd` mentions in `skills/cleanup.py`, `skills/updater.py`, `scripts/package_app.py`, `blender/cards/make_cards.py`, `game_tools/blender_convert.py`, `game_tools/build_game_assets.py`, `.gitignore` and tests mean the original source folder outside the library.
+- **Zips are stale:** `generator.zip`, `Vermeil-App.zip`, and the game_assets pack need rebuilding (`python scripts/package_app.py --drive --only app,generator`, plus the pack). **Nothing is uploaded: the owner said they'll do it.**
+
+**Phone removed, no more "her", WASD in hubs, Airbnb and airline sites, Generator became Media (photo editor, video editor, Seedance within free tokens) (5 Nov).** Full suite: 867 tests, OK, 4 skipped. UI checked in the browser preview only (mock API), not in the real app window. **Seedance and Seedream were never called for real: there's no `ARK_API_KEY` here.**
+- **Phone:** moved to `_archive/removed_phone/` (gitignored): `brain/phone.py`, `ui/phone/`, `android/`, `phone-ios/`, `.github/workflows/android.yml` and `ios.yml`, `ui/vendor/qrcode.js`. Knock-on: GPS runs (`skills/gymlife.py`, Api `gym_runs`, `gym_run_save`, `gym_run_remove`) have no UI now and could be deleted later. `retrogames.save_data` stays because `ui/games/player.html` uses it. The owner's `data/phone.json` was left alone.
+- **Wording:** user-visible and AI-read text no longer says "her". Internal names remain on purpose (`"her"` keys, `.her` CSS, `her-call`, `herlife.py/js`, `her_say`). `VOICE_GENDER` and "female" are character defaults.
+- **WASD:** `ui/room.js`, `ui/life.js`, `ui/index.html`, `ui/social.css`.
+- **Travel:** `skills/planlife.py`, `ui/planlife.js`. Airbnb and airlines have no public live API, so there's no scraping and there are no invented deep links. The Airbnb search link carries place, dates and guests (checked). Airline buttons open the home page and the user fills in the form. cebupacificair.com and philippineairlines.com were loaded in a browser; the other airline URLs were not each checked.
+- **Media:** internal plugin and panel id stays `generator`, zip stays `generator.zip`; the name shown is Media. `ui/generator.js` (tabs, meters, setup card), `ui/photo.js`, `ui/videoedit.js`, `skills/seedance.py`, `skills/videoedit.py`, `skills/generator.py`.
+- **Photo editor:** the owner chose miniPaint because hiding Photopea's ads needs a paid Distributor account, and stripping them was declined. Vendored in `ui/vendor/minipaint/` (4.7 MB, licence in `MIT-LICENSE.txt`). It has fewer functions than Photopea.
+- **Seedance limits:** ledger `data/media_tokens.json`. Seedance only makes video, so pictures use Seedream. Each job is estimated first and refused if over the limit; HTTP 429 `SetLimitExceeded` is treated as out of tokens. The ledger only knows this PC, and **only BytePlus's Free Tokens Only switch truly guarantees no charge**. The switch is off by default and can't be turned back on once disabled. Model IDs may need `SEEDANCE_MODEL` / `SEEDREAM_MODEL`.
+- **Video editor:** renders with ffmpeg (`imageio_ffmpeg`). Project autosaves to `data/video_project.json` because pywebview's private mode loses localStorage. A real render with transitions, text and music matched the page's total time. Limits: one video track, no keyframes or effects library, and volume above 100% is only heard in the export.
+- **Packaging bug fixed:** `feature_files` in `scripts/package_app.py` ignored a plugin's `folders`, so Install would have left an empty minipaint folder. It now zips `ui/` folders of plugins with no pack (`zip_check`: 47 minipaint files in the list). **`generator.zip` was rebuilt (`python scripts/package_app.py --drive --only generator`): `dist/Vermeil-Drive/2 - Plugins/23 Media/generator.zip`, 53 files, 3.7 MB. Not uploaded: the owner said to stop and will upload it themself later. Nothing on Drive was changed.** Drive for desktop is running now (`G:\My Drive\Vermeil`, 8.2 GB free on 5 Nov). The old zip there is `2 - Plugins\23 Generator\generator.zip` (36.6 MB, with wheels), so its folder still says Generator. It was unpacked into a temp folder with the app's real `plugins._unpack`: all 53 files match the project, and no `data/` files or secrets. It has no wheels, so Install gets python-pptx and moviepy from the internet (add `--with-wheels` to include them). The Install button itself, including its download from Drive, wasn't run. **`Vermeil-App.zip` was rebuilt too (`--drive --only app`): `dist/Vermeil-Drive/1 - Vermeil app/Vermeil-App.zip`, 781 files, 577 MB. `HANDOVER.md` is now in `ALWAYS_SKIP_FILES` so these private notes never ship. Not uploaded either; the copy on Drive is still the old app, without the new `edit_*` and `media_*` Api methods and with the phone feature, so upload both zips at the same time.** Zip checked by file name: not corrupt, no `env` or secret files, no phone files or `_archive`, none of Media's `code` files, and "jpant" in none of its .py, .bat, .ps1 or .json files under 2 MB. Its `data/` holds only the fresh `plugins.json`, voice lists and starter models. It hasn't been installed on a clean PC. It also carries 45 `ui/vendor/minipaint` files, because only `code` entries are left out of the app zip; harmless duplication. `--only` rewrites `links.txt` with only those features, so don't replace the full list with it if one is in use.
+- **Still to test by the owner:** the two-PC netplay test (above) and a live Seedance run with a real key.
+
+**Two PCs together with no server: friends, invites, visiting a room, kick and 1-day ban, player 2 on the farm. Also the focus fix, a startup guard and universal paths (5 Nov).** Full suite: 865 tests, OK, 5 skipped. **Never tried between two real PCs on two real networks: do that first.**
+- **The rule from the owner:** no relay server, and it must not depend on being on the same Wi-Fi. Same Wi-Fi is only a shortcut.
+- **Network (`skills/netplay.py`):** one UDP socket, default port 47630. The public BitTorrent DHT (BEP 5; `Dht`, `BOOTSTRAP`) is used only as an address book: each PC publishes "this code is here" and looks up friends' codes. Then both sides send to each other so their routers open (hole punching, `_found`, `punching`). `VN1B` is a same-Wi-Fi beacon. Each PC has a static 2048-bit DH key, and the 6-character code comes from the public key, so a code can't be taken over. Messages use SHA256-CTR + HMAC, with fragments and acks. Bans last 24 h, `net_ban`. Identity is `data/net_identity.json`. Letters I, L, O and digits 0, 1 are never used in codes.
+- **Nothing starts by itself:** `Api()` never starts the network; JS calls `net_enable`. The Friends panel has an internet switch, a direct address box and a turn-off.
+- **Room (`ui/friends.js`, `initFriends`):** 👥 `#friendsBtn` to the right of the notification button. Friend list, add by code, friend requests, invite with Accept/Decline (`answer` on notes in `social.js`), join by typed code, "Try an invite" (one PC, with the test friend). A guest is in hub `netvisit` and roams the host's room. Clicking a person gives Talk/Kick/Ban (`hooks.person`). Host going into any hub sends guests home ("The host went out.").
+- **Farm (`ui/turtle/coop.js`, `?guest=CODE`):** `joinFarm`, `makeCoop`. The host's game is the only truth: guests send `farm.act`, the host checks it (`act`) and sends `farm.sync` back. "New visitors can" and a per-person setting choose Roam only or Help with the farm. A guest gets a copy of the host's farm, and their own save is never touched (guest no-ops in `main.js`). `F.whyAt` split out of `farm.js`.
+- **Testing without two PCs:** `ui/netmock.js` stands in for netplay over a BroadcastChannel (previews only, the real app never loads it). Two tabs: `index.html?mock&me=HSTAAA` and `?mock&me=GSTBBB`; farm `turtle/index.html?mocknet=HSTAAA` and `?guest=HSTAAA&mocknet=GSTBBB`. Test codes must avoid I, L, O, 0, 1.
+- **Checked:** `tests/test_netplay.py` (19) on real sockets on one PC with a fake DHT node. Two simulated tabs, no console errors: enable, add by code, request, invite, accept, roam, position reaches host, kick, rejoin, ban refused; farm join by invite and by typed code, both see each other, roam only refused, switch to help, harvest and hoe reach the host and sync back, kick sends home. **Real public DHT, one PC, two throwaway identities:** 11 nodes answered in 2 s, and the first PC's code and port came back to the second after 15 s. Connecting through my own public address failed in that test (150 s), which fits a router that doesn't loop back to itself, but it could not be separated from a punching problem here.
+- **Known limits:** some routers, carrier-grade NAT and mobile data refuse direct connections; then the app says it can't reach them, and the way out is a port forward or Tailscale plus the direct address box. Windows Firewall may ask on first start (Allow). DHT nodes and connected people can see the public IP. The encryption layer is home-made and unaudited: fine for game chat, not secrets. Room visitors are spheres and a farm visitor's companion has the default body, because models aren't transferred. Trees and rocks changed by the host aren't mirrored live. Guest tools are hand, hoe, can and seeds; watering doesn't use the host's can. A friend's room is only reachable while they're in the main room or farm. Custom-furniture layouts only show what the other PC has.
+- **Focus bug fixed (`skills/focus.py`):** `_overdue`, and `current()` now closes a session once all rounds and breaks plus 30 minutes have passed, noted "ended by itself". The stale 22 Oct session clears itself on next read. Test: `test_forgotten_session_ends_by_itself`.
+- **"Starting up..." hang:** that text means `app.js` never ran. Not reproduced in 3 real-engine runs (Ready about 5 s after the page opened), and there was no `data/ui_errors.log`. **So the cause isn't known.** `ui/index.html` now has a watchdog: one automatic retry, then a message and Try again.
+- **Universal paths:** `game_tools/blender_convert.py`, `blender_missing.py`, `blender/cards/make_cards.py` and `skills/animate.py` no longer name this PC; `app.py` drops a `code_workspace` that doesn't exist. No "jpant" left in scanned files (excluding data, HANDOVER, dnd, unimate_bin). Empty `data/` check: the app imports, `Api()` starts, the network stays off.
+- **To do at next push:** `.gitignore` now has `data/*` with exceptions, but GitHub already tracks 23 files under `data/`, several personal (`app_settings.json`, `characters.json`, `focus.json`, `relationship.json`, `room_layout.json`, and more). `.gitignore` won't untrack them; they need `git rm --cached` when the owner asks for a push.
+
+**Main room rework and the new Socialize layer: test floor, snap/stack, one resizable room, friends, messages, official hubs, rental stalls (5 Nov).** Checked in the browser preview only (`vermeil-ui` in `.claude/launch.json`, port 8771, `/index.html?mock`; `ui/mock.js` is the fake API). Not run in the real app window. Full suite: 845 tests, OK, 5 skipped.
+- **Which code this is:** the owner's screenshots show "Visits", "Clothes" and a Library list that are not in this folder or on any GitHub branch checked. This round was built on this folder, with the new work in separate files so it can be moved across.
+- **Test floor (`ui/furnfloor.js`):** Settings > Test > "Furniture test floor". A small labelled sample: walls paired with floors, all floors, and up to `PER_ROW` = 6 pieces per furniture category. It has its own renderer and doesn't touch the room. The camera sits on the +z side and rows run towards -z, because wall panels are one-sided.
+- **DnD assets:** removed from the main room. Old saves simply drop `dnd_*` items. `ui/dnd_furniture.js` is now unreferenced and can be deleted later. The `dnd` asset folder itself was not touched.
+- **Snap and stack (`cozyroom.js` `moveItem`):** floor pieces snap their edge to `GRID` = 0.5 m and land on whatever is under them. Whatever rests on a piece moves with it.
+- **One room, resizable (`house.js`, `renderHousePane` in `app.js`):** `ROOM_ORIGINAL` 10 x 8.5 m, `ROOM_LIMITS` width 6-30, length 5-24. Sliders go both ways from the original, with a "Back to original size" button. New rooms are gone; extra rooms in old saves are removed and their furniture moved inside.
+- **Walls and floors:** `UNIQUE_WALLS` (foam, stone, shiplap, subway, marble, hexpanel, bamboo, concrete, neongrid, slats, quilted) with relief from `WALL_RELIEF`. New floors for the hubs: grass, sand, deck, pavers, gallery concrete, pale concrete.
+- **Top bar (`index.html`, `ui/social.css`):** `.top-left` holds Edit room, `#hubPill`, `#notifBtn`. `#msgBtn` is at the bottom right of Send. Collapsing the sidebar moves the top icons (`body.collapsed` rules in `social.css`).
+- **Library (`ui/library.js`, `#modelLibrary`, `#rvcLibrary`):** import and "Delete permanently" for 3D models and voices in Character customization. `Api.delete_model` refuses the default model and anything outside the library; characters using a deleted model fall back to the one it was made from. The owner wrote "inside the sop": read as "shop", meaning this library page. Confirm if that's wrong.
+- **Socialize (`ui/social.js`, sidebar `data-panel="socialize"`):** Habbo Navigator style tabs: Events, Rooms, Me, Official, Search. Data goes through `Api.social_load/social_save` to `data/social.json`. Other people and rooms are local samples labelled "sample": **there is no online server**, so nothing is shared between PCs. Events can be created by anyone here for now; real admin-only needs a server too.
+- **Test friend:** id `test-friend`. Messages it, invite it, and after 2 s it accepts and roams as a sphere (`ui/roamers.js`), also in the home room.
+- **Hubs (`ui/hubs.js`):** `OFFICIAL_HUBS`, `buildHub(key, arg)`: park (Central Park, approach people and talk), cafe (sit at a table, private or public conversation), library (doors lead to `study` rooms, Back returns), museum, arcade, beach, stalls. `HUB_CATALOG` items are `hubOnly` (never in the room editor or test floor) with `seat`, `act` or `info`. `room.js`: `enterHub`, `leaveHub`, `_hubClick`, `walkToPerson`, `_sit`. Editing is refused inside a hub.
+- **Stalls:** `STALL_LAYOUT` {size 3, hall 3, cols 3, rows 2}: 2 x 2 blocks repeating with hallways, following the owner's drawing. Empty until rented. One stall per person, renter sets the name and goods. `STALL_RENT` = 0: free while testing.
+- **Voice:** `socialize` added to `FEATURES` in `brain/voice_commands.py`.
+- **Tests:** `test_model_deleted_for_good`, `test_social_data_is_saved` (`test_app.py`); `test_no_extra_rooms_any_more` replaced `test_rooms_both_sides`; 3 in `test_house_music.py`. `test_due_alerts_are_announced` read the real `data/focus.json`, so it now mocks `_focus_working`.
+- **Found here, fixed in the entry above:** `data/focus.json` held a focus session started 22 Oct that never ended, and it held back reminders for 25 of every 30 minutes.
+- **Checked in the browser (mock, no console errors):** all hubs render; Socialize tabs; creating an event; invite and sphere; renting and customizing a stall; café dialog and private/public conversation; study door and Back; Go home restores the room; collapsed sidebar; library dialogs; test floor; snap, stack and riders; resize both ways and limits.
+- **Not checked:** the real app window, real import and delete of files through the dialogs, and the sitting animation (the mock character has no clips, so it uses the fallback). Hub and stall clicks were partly driven by calling the handlers, not by walking there with real mouse clicks.
+
+**Turtle Island: 20 new dinosaurs, eight far turtles, the broken-song story, rare finds, saddle work, 3-per-job crews; Kindred's arms (4 Nov).** Checked in the browser preview (`vermeil-games`, port 8770, `/turtle/index.html`; its saves are browser storage, not the real save). Paleo Pines was used only as a mechanics reference through its wiki (skills split into farm and wild, work done from the saddle, limited job crews). Its code, names and story were not used.
+- **Dinosaurs (`DINOS` in `data.js`):** 30 now. The first ten are `basic: true`. The 20 new kinds (`galli` Strider, `quetz` Galewing, `spino` Sailjaw, `pachy` Thumpdome, `styra` Furrowhorn, `anky2` Clubtail, `brachio` Cloudneck, `diplo` Whiplash, `kentro` Spikeback, `theri` Sicklehand, `dilo` Frillcrest, `compy` Nibbit, `ovi` Eggkeeper, `cory` Bellcrest, `ptera` Duskwing, `mosa` Deepmaw, `ichthy` Glimfin, `iguan` Thumbspur, `carno` Hornrunner, `dimetro` Sunsail) each have a `home` turtle and are built on the six pack rigs or the lofted plesio/ptero/anky bodies, so tiers and patterns (`rollLook`) and daily re-rolls work on all 30. **Travel:** Strider (land, Willowmere, speed up to 36) and Galewing (sky, Sunback, up to 42), both rideable from form 1.
+- **Gifts (`PERKS`, `perk: [kind, 1-3]`, `perkOf`):** quick, tireless, green (`plot.care`, so golden crops), lucky, strong, swift (player.js speed), gentle (friendship), keen (sniff range). The first ten have strength 1; the far-turtle kinds have 2 or 3.
+- **Farm work (`dinos.js`):** only `FARM_SKILLS` (water, weed, plant, harvest, till, carry) are given out, and only the first `JOB_SLOTS` = 3 dinosaurs on a job do it (`crewOf`, `onCrew`). The journal shows "n/3" and greys out a full job. Chopping, smashing, digging, sniffing and diving happen only while ridden. A Lazy one sometimes skips work. No limit on how many dinosaurs you keep (`roomFor` is Infinity).
+- **Saddle work (`ui/turtle/ridework.js`):** a tiller tills a row ahead; a waterer drinks at a pond or the sea, then waters the dry plots around it; harvesters and planters work the patch around them; diggers dig (once per spot per day); divers dive at sea. Reach grows with form, and far-turtle kinds reach further.
+- **Rare finds (`RARE_FINDS`, `ui/turtle/rare.js`):** one item per turtle, all 16, each smelled only by one kind (for example the Unknown Seed on the Elder by a Burrowlet). Ride that kind on that turtle: it sniffs, you're told warmer, a glint shows within 14 m, and E digs it up. There are 3 spots per turtle per week. Four are seeds of `wild` crops never sold (Moonmelon, Emberroot, Prismbloom, Starfruit). The Thornheart Berry is a treat worth 42 friendship.
+- **Far turtles (`ISLANDS` bloom, thorn, pillar, hollow, fernwood, reef, mist, salt; `ui/turtle/explore.js`):** routes from r 2350 to 4100, hidden until `reveal` (`boat` for Bloomdrift, `verses` for the rest; `world.js` reveals them live and calls `G.revealed`). `feature` builds: a Shellwright city with streets, pillars and roofless houses; cave mouths with glowing crystals; giant ferns and a canopy platform; a flower ring; nests and caught clouds; a coral lagoon; a thorn wall; and salt crust with crystal clusters. The map chart scales to the furthest visible turtle.
+- **Story (`ARCS` 12, `STORY`, `TALES`, `VERSES`):** the Shellwrights split the Waking Song into eight verses, one per far turtle. Each verse stone needs a gift (sniff, smash, reach or fly, fly, dive or swim, slash, dig). New steps: Bloomdrift's first verse (arc 3), a travel mount and a first rare find (arc 4). Arc 8 is "The broken song" and arc 9 is "The keepers' verses". Old Moss now gives the Heartseed after all eight verses, not at "truth". Ferra, Ona, Fen, Luma, Cole and Sable each point to one far turtle. The journal's Story page shows the verses; the test Story board lists every turtle with who lives there, its verse and its rare find. "Finish this story step" knows the new steps.
+- **Test floor:** "Your dinosaurs" now shows each one's own look; a new row "Every kind, every tier" shows all 30 kinds across the five tiers.
+- **Rigger (Kindred's arms):** `_scan()` never filled `loose`, so hair, bows and ribbons were measured as body: the spine shifted and arms vanished into the dress. Loose pieces' vertices are now left out of `_slab`/`_section`. Arms are first traced over the skin's own edges from the outside of the shoulder (`_surface`, `_traceArmSurface`): it stops where the ring widens or turns back, and is rejected if it never leaves the shoulder (that side then mirrors the other). Then comes the older point-cloud walk (`_traceLimb`), then the old straight-line fallback. Kindred: both arms now run down her sides to the hands. Finn is unchanged (arms out). Little Witch stands side-on, which is still a hard case.
+- **Tests:** `tests/test_turtle_island.py` expects 30 lines, and checks every kind's home, every rare find and every verse point at real turtles and kinds: 18 run, OK. The full suite was started but hadn't finished when this was pushed (the phone-removal session was editing the same folder at the time), so no full count this round.
+- **Not done / not checked:** all 90 new forms only seen at a distance on the test floor (no close look at each). The verse story was walked by setting flags, not played through. Sniffing and saddle work were tested by calling them, not by riding with keys. Far turtles are big and slow to reach by boat; ferry and the two travel mounts help. Rain was left as it was (fixed last round). The phone, Shop, Clothes, invite and rig-guide work is in a separate session (see its own entry).
+
+**Big round: world life, felling, weather, patterns, rigger tools (3 Nov, latest).** Checked in the browser preview; 839 tests OK.
+- **Farm debris** (`DEBRIS` in `world.js`): young trees, birch and bushes added, with more of everything; trees change with the season (`inSeason`).
+- **Felling** (`ui/turtle/fell.js`): every blow shakes it; the third (basic tools) makes a tree fall with gravity, then a dust puff, then the wood. Stumps and logs split into pieces, and rocks crack smaller each hit, then break into tumbling chunks. Picking fibre or weeds is a 2-second kneel and tug (`F.pull`, `P.act(..., len)`).
+- **Sounds** (`audio.js`): made in code, not downloaded. `woodhit`, `woodfall`, `woodsplit`, `stonehit`, `stonebreak`, `rustle`, `poof`, rain drops and gusts (`weatherSounds`), and `dinoVoice(size, mood, pitch)` for every dinosaur. The YouTube tracks and Roblox sounds the owner linked were NOT used: downloading them isn't allowed.
+- **Weather** (`ui/turtle/weather.js`): rain streaks under a grey cloud deck; storms (heavy rain now is a storm) with dark clouds, forked lightning, a flash and thunder; snow flakes; wind wisps. Days are darker in bad weather.
+- **Lamps** (`lampLight`, `setLamps` in `made.js`): every lamp shares one glass and halo and lights at dusk; pack street lamps get one too. **Fireflies** on about two nights in three (`biomes.js`).
+- **Islands** (`ui/turtle/biomes.js`): Hoarshell people shovel snow, skiers come down a run beside a chair lift; Coralcrest has umbrellas, loungers, tiki torches and people fishing; Emberback has miners at a timbered mine mouth, a coal cart on rails, and a smoking, glowing volcano. The Elder has a stone dais at the heart of its ruins: story step `portal` (after `truth`) opens a portal showing Pell asleep.
+- **Bridge crossings** (`life.js`): wild dinosaurs now and then cross to Willowmere and back while the bridge is down; Willowmere's herds move with the turtle.
+- **Dinosaurs:** a personality each (`PERSONALITY` in `dinos.js`) that sets how often it digs, sniffs, naps and chatters; reins and a halter on every tamed one (`harness` in `dinomodel.js`, `makeRope`); riders' feet hang in the stirrups. Riding: E clears what's in front by the mount's skill (chop, mine/smash, trample), `rideClear` in `main.js`. Patterns and rarity: `rollLook` in `data.js`, tiers Common 62 %, Uncommon 25 %, Rare 9 %, Legendary 3.5 %, Mythic 0.5 %, seven patterns (`markOf` in `dinomodel.js`); wild herds re-roll each morning (`L.respawn`), a tamed one keeps its look (`r.look`). Crestback's own pointed teeth are pressed into a flat beak; Cloudsail stands on two legs; Tunnelmaw's legs start inside the body.
+- **Vehicles** (`ui/turtle/wheels.js`): any model is split into its real pieces; round flat pieces low down are wheels, and spokes, hubs and rims inside them turn with them. Works on all 58 vehicles on the test floor (one, the container, has none).
+- **Farm:** water tower → barrel (earlier); shipping bin lid opens while you use it; animals can be picked up (small) or led (big) and set down anywhere, even in a pen (`s.animalHome`); hens have necks; fountains hold water (`fillFountain`); birds never perch on stumps; seeds show their crop in a packet.
+- **Companion** speaks only when she's within 9 m (or in the boat).
+- **Test tools:** your dinosaurs, every tier and every pattern on the lineup floor; a Story board (`storyBoard` in `ui.js`).
+- **Rigger:** "Joint is…" dropdown renames a joint (and its chain) to a part so its colour and behaviour change; dot size slider; Undo button and Ctrl+Z for joints and test poses; 15 test poses (`POSES`, 5 biped, 5 quadruped, 5 monster) applied by world-axis turns (`applyPose`).
+- **Imports:** `skills/texmatch.py` matches loose pictures to materials by shared words (Hilda's `M_ch0004_00_toko_body` to `ch0004_00_toko_co.ktx.png`), used for .glb imports (`attach_pictures`) and in Blender (`by_name`). Hilda's two files were repaired in place. Delete animated models also empties UniMate's work folder and refreshes the model list.
+- **Not done this round (needs its own sessions):** 20 new dinosaurs with home biomes, new exploration turtles (ancient cities, caves, forests) and a larger map with travel mounts, the deeper story and Paleo Pines-style progression, farm work slots (3 per job), rare biome items found by sniffing while riding, and a deeper auto-rig rework. Paleo Pines was not opened: its code and story are its makers' work.
+
+**Water, imports and auto rig (3 Nov).**
+- **Water:** `ui/turtle/water.js`. The water tower is the source: it no longer sprinkles; it fills the `waterbarrel` piped in beside it (`barrelBy` in `build.js`, added to old saves too) by 10 an hour, twice that in rain, up to 120. Sprinklers draw 6 each morning or stay dry, with a message. The can holds 20; each plot takes 1. Fill it at the barrel with E (the barrel drains by what it takes), or free from the sea or a pond. The barrel shows its level, a gauge and a drip. The companion's "Talk" now comes after whatever you've walked up to.
+- **Imports (`skills/modelimport.py`, `fbx2glb.py`, `blend2glb.py`):** pictures the model never names are matched to materials by name (`by_name`: Body_mt to Shibahu_body_dif.png). A glow with no picture over a textured surface is dropped, since it washed Shibahu out white. A dark untextured `line*`/`outline*` material is drawn one-sided, since it was an anime outline shell covering the body in black (also at runtime in `plainSurfaces`). `strip_stage` now reads skinned parts at their real place through their bones, knows `base_mesh` and similar names, and removes any sheet much bigger than the model lying any way. Checked on all of `ui/models`: only Shibahu's base went. Shibahu-2 and -2-animated were repaired in place; backups are in the session temp folder.
+- **Faces (`facetex.js`):** an eye that fills only part of its frame's height (Rayquaza) and frames that differ only a little now count. Compared on 15 models: only Rayquaza changed (it now blinks).
+- **Room size:** `MAX_SPAN` 3 m in `room.js`; the turtle companion is capped by length the same way. Rayquaza went from 11 m long to 3 m.
+- **Auto rig (`rigger.js`):** fitted to the body without its loose pieces (`_scan().body`), so a hat no longer puts the shoulders on the face. Compact loose pieces (or ones named hat, staff, bag…, `ITEM_NAME` in `rigparts.js`) get one stiff `item_N` bone in a new orange **Items** colour. Ribbons, capes and tails keep chains. Each piece is skinned only to its own bones (`owner`), and the body never to them. Arms are traced no further than half the body's height from the shoulder. Little Witch checked by eye: 3 items, shoulders on the torso. Kindred's arms still trace into its ribbons and need dragging.
+- **Not done:** Shibahu's walk was not remade (it was animated on the old rig); remaking its motions may help. Kindred's arms. Real app window not tried.
+
+**Turtle Island fifth round (3 Nov).** From 20 screenshots; checked in the browser preview, not the app window.
+- **Dinosaurs:** `sizes` in `data.js` raised for every line, and the neck line goes to 9.5 m. `raise` in `dinomodel.js` carries a long neck high, brachiosaurus-like, and lowers it to drink or eat. Teeth used to be found by any "horn" material on the head, so the Crestback's crest counted as teeth and its head was never cut: now only the jaw's own teeth count (`jawTeeth`), and a head is cut whenever its jaw is a sliver (`jawN` against `headN`). Eyes are placed from the snout back to just ahead of the jaw hinge, so a frill no longer carries them. `leg()` in `makeLofted` gives the armoured one and the pterosaur thighs, knees, shins and toes reaching the ground. The pterosaur walks on folded wing-arms that hide in flight. Grazers have a low cropping edge.
+- **Swimmers:** `seaKind`, `sandy` and `seaSpot` in `life.js` keep them on sand (below 3.6 m) or in the sea, wild or yours, and ridden (`player.js`).
+- **Riding:** every tamed dinosaur wears `makeSaddle` (`made.js`) on the bone halfway along its back. The rider is placed from that anchor each frame, so they rise, fall and lean with it. Feet go down either side as wide as the back.
+- **Boat:** floats higher (`S.deck`), so the sea stays out of the hull. It has a thwart and two oars that row while moving, and the hands follow them (`P.oars`).
+- **Machines:** `emitter()` in `made.js` gives soft particles to a prop: oven flames, sparks and chimney smoke, and Smoke Hut smoke. They are always on lightly and stronger while working. The Cheese Cellar is a walk-in house (r 2.6). The Cooking Pot is now `made: "pot"`: a ladle stirs by itself, the broth turns the dish's colour and the recipe's ingredients float round. `build.js` passes the running recipe to `run(t, on, job)`.
+- **Vehicles:** `wheelsOf` and `roll` in `vehicles.js` turn every `wheel_N` part by the distance driven, backwards too. On the test floor each vehicle drives up and back.
+- **Swordfish:** the loader hid any part named like a weapon, and "Swordfish" matched. It now never hides more than 40% of a model.
+- **Hens:** `makeChicken` (`made.js`) and `makeChickens` (`creatures.js`). Four per coop. They come out of its door by day, peck and wander nearby, go back in, and stay in at night. They are also on the test floor.
+- **Roads:** `roadsMesh()` in `terrain.js` lays each road as one smooth strip over the ground, so the terrain no longer paints them in zig-zag facets.
+- **Towns:** `street`, `huddle`, `lane`, `beachRow` and `terrace` in `data.js` lay out Sunback, Hoarshell, Mirewalk, Coralcrest and Emberback. Each has stalls (`Q.town` in `quests.js`), some selling food and some for rent. A rent key is `island:index`, except Willowmere's old numbers.
+- **Farm debris:** `debris()` in `world.js` adds stumps, logs, stones and weeds to the open farm, always in the same spots. Axe, pick or picking clears them for wood, stone or fibre; tilling pulls a weed. They come back after 1 to 3 weeks.
+- **Not checked:** the hen coop door direction on the pack's Hen House, every island town by eye (only Sunback was seen), rider feet on the biggest forms, the real app window.
+
+**Hats (3 Nov, later).** Room hats are sized by `_measureHead` in `room.js`. The radius is now the smallest of: half the head box's widest side, 0.65 × the head's height, and 0.2 × the model's height. Fins and crests had made Garchomp's hat 0.33 m, and it is now 0.19 m. Checked on 26 rigged models in `ui/models`, and by eye on Garchomp, the anime girl and Luffy. `tidyProps` in `rigparts.js` no longer moves a bone onto a bone below it. The anime girl's head bone had become its own parent, so she crashed on load.
+
+**Second round, same day.** The owner plays while work goes on, so screenshots can show the old build: check before re-fixing.
+- **Sitting and crouching:** `legs()` in `player.js` uses the same limb aiming as the arms. Seats are `SEATS` in `data.js`, fractions of each vehicle (the models have no seat or steering mesh). Tractor and seed drill seen by eye; the others are worked out from wheel positions.
+- **Harvest:** this was hand numbers, not UniMate, so no Blender clip was needed: it is now a crouch on leg aiming, in code.
+- **Town:** `ring()` takes a `gap` so no house blocks the way in; a road runs to the plaza; folk avoid solids with `pushLocal`, stalls and benches are solid along their length; 18 folk per town, 30 in Willowmere. Fountain: `ui/games/asset_packs/town/Fountain.glb` from the owner's .blend.
+- **Life:** dinosaurs roam, go to the sea with `shoreNear` and `drink()`. Pens: `pen` in the catalog, `C.pen`, `r.pen` for dinos, `s.penned` for animals. Companion: `s.helper` follow or farm, `tend()` in `creatures.js`. Stalls: `makeGoods`, `C.showGoods`, customers walk over (`L.shopIn`, `C.buyAt`).
+- **Bodies:** `cutJaw` in `dinomodel.js` splits the head along the mouth line at load, because the pack jaws cover only the chin; `mouthParts` in `made.js` adds teeth. `bite: "sharp"` in data marks hunters. The T. rex keeps its own teeth. `skinTube` gives lofted animals one skin with no gaps. Pterosaur wings rebuilt.
+- **Test tools:** `showcase.js` is a separate floor for all creatures and people, or machines and vehicles. Start a new game writes a fresh save; the old one stays in the `.bak`.
+- **Imports:** `.blend` through `skills/blend2glb.py` with UniMate's bpy, keeping rigs, shape keys and clips. `strip_stage` removes platforms from every import. `tidyProps` wears or holds items; `plainSurfaces` ignores vertex colours on textured surfaces (rips keep masks there: this was Mint's teal skin) and hides face mask shells. Companion size comes from `standingBox`, in its idle pose. Ears have their own region and colour.
+- **Auto rig:** `_scan` splits a model into real pieces, the body gets the skeleton, loose pieces get chains (`_fitExtras`); arms traced from the body surface in any pose.
+- **Limits:** the Kindred .blend has no armature, so nothing prebuilt to reuse, and no face rig was built for it. Scaling and mouths were checked by measurement and eye on a sample, not all 30 forms closely. Run glitch fixed by reasoning (elbow flip, shadows on alternate frames), not reproduced. Sound not heard. Hub cover not viewed. Not run in the real app window.
+
+**Turtle Island and rigger round (3 Nov 2026).** Reported with 15 screenshots; all done in `ui/turtle/`, `ui/rigger.js`, `ui/rigparts.js`, `ui/room.js`.
+- **Head spin:** a clip only writes a bone when its value changes, so `rotation += x` built up on still bones. `makeOverlay()` in `assets.js` takes nudges off before each mixer update; `O.turn(bone, "x"|"y"|"z", angle)` uses the model's own axes. Anything moved over a clip must go through it.
+- **Dinosaurs:** `dinomodel.js` rewritten. Pack material zones are painted separately by `paintZones` (they were all one colour). Parts sit on the skin via `surfaceOf`, and are sized by torso depth; none of the pack models has eyes, so `makeEyes` adds them with blinking lids. `parts` in `data.js` changed: `ridge`, `scutes`, `sail`, `plates`, `crest`, `horns`, `dome`, `mane`. Feet are kept in step by stride measured from the clip; they look at you, sniff, sway. Belly rub lies on the side, resting on the lowest live bone; `held()` keeps it in place.
+- **Tools:** the old Euler arm numbers bent the forearm across the chest. `player.js` now uses two-bone IK (`reach`) to the `HOLD` table; the tool is set from `P.grip` in `makeTackle`. Swings are `P.swing`, two-handed. `hold` is in the scene, not on the wrist.
+- **Machines:** `madeProp` rebuilt with detail; moving parts go in `g.userData.run(t, on)`, called from `build.js`. `t.kick` runs one for 3 s when opened. Static parts are merged by `bake()`.
+- **Vehicles:** E or R gets out, `#leaveBtn` on screen, and exit picks a free side.
+- **Companion:** the path lacked `models/`, so the app character never loaded. Tested with a stubbed `get_state` and Sylveon. Built-in shapes like Pip's penguin have no file, so the default body stands in under their name.
+- **Rigger:** `analyzeRig` turns limbs whose wrists reach the ground on both sides into legs (`standsOnFront`, audited on all 72 models: only the 3 Sylveon files). Quadruped preset has `front_*` legs, `_feet()` counts what touches the ground, `_fitQuadruped` fits it. Placed joints no longer link; `Link`, `Unlink`, loose-joint question on save. Selected joint has X/Y/Z arrows; Snap keeps to one.
+- **Look:** `loading.webp` is the owner's picture with the corner badge painted out; bar and tip are live overlays in picture proportions. Round 3 CSS at the end of `turtle.css`; bag is a slot grid.
+- **Speed:** `forest()` splits into 64 m patches with real culling (`spot.insts`, `spot.slot`), far turtles hide what stands on them, shadows redraw every second frame, HUD and nearest-thing run at 10 Hz, far herds and folk animate less often, resolution steps down on slow machines, nothing draws when hidden. Triangles at the start spot: 2.95M to 1.14M. Draw calls unchanged at about 1,300. Frame time could not be measured fairly: the preview pane was hidden.
+- **Tests:** 839 run, OK (4 skipped). `python -m unittest` exits with code 29 although it reports OK; not looked into.
+- **Not checked:** Sylveon's walk in the room after the change, a real run inside the app window, a fresh quadruped auto-rig on an unrigged model (`_fitQuadruped` was not run on one), and the strike frame of the swing by eye. Interface restyle covers Turtle Island only, not the main Vermeil app.
+
+**Where it lives.** The folder is now `C:\Users\jpant\Downloads\Vermeil-voice-gpu-and-setup-fix\Vermeil-voice-gpu-and-setup-fix` (it used to be `D:\THIS PC\Downloads\...`) and is not a git repo. GitHub is `bouwnak/Vermeil`, branch `voice-gpu-and-setup-fix`.
+
+**How to push.** Git isn't on PATH. Use `%LOCALAPPDATA%\Vermeil\PortableGit\cmd\git.exe` with the clone at `%TEMP%\claude\vermeil_push`: pull with `--ff-only`, copy changed files in, commit, push. The owner signs in to GitHub themself. Never push `data/`, `env`, or `ui/games/asset_packs/_originals/`. Push only when asked.
+
+**Rules added lately.**
+- Everything for models must be universal: no per-model code, and it must work on models imported later.
+- Turtle Island uses only the chosen packs: Ultimate Nature, Farm Buildings, Farm Animal, Simple Nature, Ultimate Modular Men, Ultimate Modular Women, Stylized Nature MegaKit, Stylized Tree, Ultimate Food, Animated Cute Fish, plus everything in `ui/games/asset_packs`.
+- Dialogue has no voice: letters, blips and dots, like Animal Crossing.
+- The dinosaurs are chibi low-poly and original.
+- Never capture the full screen, avoid popping up windows, and don't download or run executables.
+
+**Turtle Island (`ui/turtle/`).** A three.js game; all content is plain data in `data.js`.
+- `terrain.js`: land, exact mesh ground in `Land.ground()`, roads, walled flats.
+- `world.js`: turtles, collision grid, far turtles load when near, clock, weather.
+- `player.js`: movement, blocking, camera.
+- `farm.js`: crops; plots are instanced.
+- `dinos.js` and `made.js`: dinosaurs, original props.
+- `bridge.js`, `build.js` (placing), `craft.js` (machines, market), `sail.js`, `quests.js`, `vfx.js`, `audio.js`, `ui.js`, `main.js`.
+- Save is version 2, and version 1 upgrades itself on load. `skills/turtlesave.py` writes `data/turtle_island.json` with a backup.
+- `G.run(seconds)` runs the game without drawing, so tests work when the preview pane is hidden; `G.draw()` draws one frame.
+- Status, milestones and gaps: `ui/turtle/DEVLOG.md`.
+
+**Turtle Island, second round.** New files: `dinomodel.js` (rigged bodies, forms, blinking, jaws, reactions), `life.js` (herds, birds, pterosaurs, crowds), `vehicles.js` (driving and field work). `made.js` builds the pterosaur, plesiosaur and ankylosaur. Story is Oma and Tarn's search for Pell, in `TALES` and `CARVINGS` in `data.js`. The newest owner request overrides the old chibi rule: dinosaurs should look like the low-poly reference pictures. The companion is the app's active character, read with `get_state`.
+
+**Blender passes on the packs.** `dinosaurs/` holds the six pack dinosaurs with a Jaw bone added. Vehicles were split so parts named `wheel_N` spin. Windmill models have a mesh named `blades`; only wheel-shaped ones turn. Every model in `models.json` is added to the build menu at load, so nothing goes unused.
+
+**Asset packs (`ui/games/asset_packs/`).**
+- `lowpoly_farm_01`, `lowpoly_farm_02`, `farm_vehicles` and `garden_tools`, split by Blender (Steam, run headless with `-b`).
+- Each model is one `.gltf`, centred, feet at y=0; `models.json` lists them.
+- The LowPoly packs' real texture `color_1024x1024.jpg` was never in the download; `textures/pack1.jpg` and `pack2.jpg` are stand-ins. Saving the real image over them restores the colours.
+- Garden tools export without colour.
+
+**Other rounds since 31 Oct.** UniMate rig identification and monster moves (`ui/rigparts.js`, `ui/monstermoves.js`), texture faces (`ui/facetex.js`), Simplify (`skills/slimrig.py`), import of glb, gltf, fbx and folders (`skills/modelimport.py`, `skills/fbx2glb.py`), all image types in frames (`skills/roomlife.py`), floating video window (`skills/vbrowser.py`), PC-wide installed games (`skills/launchers.py`), RetroArch inside the app (`skills/retroplay.py`, `skills/retrobar.py`).
+
+**Google Drive.** Google Drive for desktop isn't on this PC now, so `G:\My Drive\Vermeil` can't be written from here. `python scripts/package_app.py --drive` builds `dist/Vermeil-Drive/` to upload by hand.
+
+**Open.** Offered, unanswered: shape-based legs, arms and tail detection for rigs with meaningless bone names. PS2 unconfirmed (needs a BIOS). Women's Farmer outfit may show a sword.
+
+---
+
+## 1. Who I am and how I like to work (standing rules)
+
+- **Always beginner-friendly.** Use simple explanations and give step-by-step instructions that say exactly where each file goes.
+- **Use the available skills** whenever they apply.
+- **Never print, show or send secrets.** The project's `env` file holds GROQ_API_KEY, the Spotify keys and WEATHER_API_KEY. You may count its lines, but never output its contents.
+- **pip:** normally give me the exact `python -m pip install ...` command to run myself. (In PowerShell a command that starts with a quoted path needs `&` in front.) If I ask you to install something, you may run it.
+- **The asset library is `ui/general_asset_pack/`** (it was `ui/game/assets/`; the owner asked for the rename and for it to be universal). It's the project's own copy, so it may be changed. The owner said not to use any `dnd` folder outside the project.
+- **The RVC voice folders in my Downloads are references** (`Rick%20Sanchez`, `SatoruGojo_JP`, `MJThrillerEraV2`, `Ash Ketchum (Pokémon Masters EX) - Weights Model`, `Hiccup`, `Bubbles`, `Mickey%20Mouse`). Never change them; importing copies them.
+- **ALWAYS UPDATE THIS HANDOVER.** Every session, every AI (Claude, Gemini, Antigravity…), no exceptions: before finishing, add what was changed (newest first in section 4), the files touched, the test count, and what's still not done or not tested. Also keep this rule itself in the handover.
+- I prefer testing on the dev server (see section 4, the 23 Oct entry).
+- I'm in the Philippines (Asia/Manila time zone). I work on Windows, and the project is synced by OneDrive.
+
+## 2. Project location
+
+- **On my PC:** `C:\Users\jpant\OneDrive\Desktop\coding\2025\2025\`
+  - `app.py` starts the main app (pywebview window, Vermeil the 3D anime-girl companion, Groq AI online, Ollama offline).
+  - `dnd\` is the asset library: 81 folders from Quaternius packs. The game uses 72 packs, 3,355 models.
+  - `tools\kokoro\` holds the Kokoro TTS model files (`kokoro-v1.0.onnx`, 325 MB, and `voices-v1.0.bin`).
+  - `tools\rvc\` holds the 2 RVC helper models (`vec-768-layer-12.onnx` and `rmvpe.pt`) once `scripts\setup_rvc.bat` has run. Imported voice clones go in `data\rvc_voices\<name>\` (`model.pth`, `model.index`, `info.json`).
+  - `env` is the secrets file. **Never read it out.**
+- **The Unity game:** `C:\Users\jpant\My project\` (Unity 6000.6.7f1). The finished game is `Build\Vermeil.exe`. Rebuild with the command in README ("adventure rebuilt in Unity 6"). The game's art is copied into `Assets\Vermeil\Resources\Art\` (never edit `dnd\`).
+- **Python:** the app runs on Windows Python 3.13 (some old 3.10 caches exist too).
+- **Tests:** `python -m unittest discover -s tests`. The last run (28 Oct 2026) passed all 481 tests (3 skipped). The game tests alone (`tests.test_game`) are 44.
+
+## 3. Main parts
+
+### Vermeil assistant (app)
+- **Text-to-speech, `senses/tts.py`:** Piper voices are the offline default (`data/piper_voices`). Voices starting with `kokoro:` go to `senses/kokoro.py` and fall back to Piper if Kokoro fails.
+- **`senses/kokoro.py`:** Kokoro now runs **inside the app** with the `kokoro-onnx` package. There is no Docker and no server.
+  - The model loads in a background thread at startup (about 3–5 seconds); until then Vermeil uses Piper.
+  - It's used **only while the AI is online** (`llm.which()["now"] == "groq"`, see `brain/pinakamain.py` `online_now()` / `active_voice()`).
+  - Optional `.env` settings: `KOKORO_MODEL_DIR`, `KOKORO_AUTOSTART=0`, `ONNX_PROVIDER=CUDAExecutionProvider`, and `KOKORO_URL` (an advanced fallback to a Kokoro-FastAPI server).
+  - The voice is chosen in the character settings ("Online voice (Kokoro)"); Vermeil's default is `kokoro:af_heart`.
+  - **Setup:** run `scripts\setup_kokoro.bat` once. It runs `python -m pip install kokoro-onnx` and downloads the model files only if they're missing; they're already in `tools\kokoro`.
+  - **Status:** I tested it here with the real model and it works. **It hasn't been run on my PC yet.**
+- **RVC voice clones, `senses/rvc.py` + `senses/rvc_models.py`:** makes a character sound like an imported RVC voice (.pth + .index).
+  - How it works: a normal voice (Piper / Edge / Kokoro) says the sentence first, then RVC changes it into the clone. ContentVec (ONNX) hears *what* is said, RMVPE hears the *pitch*, and the voice's own network (rewritten in `rvc_models.py`, inference only, MIT credit to the RVC project) makes the new sound. No fairseq or librosa needed, so it works on Python 3.13.
+  - Languages: the clone keeps whatever language the base voice speaks, so English, Tagalog, Japanese and Korean all work. "Speak with" = the voice picked above, or a female / male voice in her language (`rvc.BASE_VOICES`), each **high / normal / low** (`rvc.BASE_CHOICES`, `female_high` … `male_low`; high/low = ±4 semitones, `BASE_SHIFT`, added in `convert()`). Japanese/Korean are spotted from the text itself.
+  - Where it's wired: `brain/pinakamain.py` `synth_voice()` (falls back to the normal voice if RVC fails), `VOICE_RVC`; `app.py` `_rvc_settings`, `rvc_list/rvc_import/rvc_delete`, `preview_voice(..., rvc, language)`; the character's `rvc` setting (`model, pitch, index_rate, protect, base`).
+  - UI: Characters → "Voice clone (RVC)" box (`ui/index.html` `#rvcBox`, `ui/app.js` "voice clone (RVC)").
+  - Test from a terminal: `python senses\rvc.py` (status + voices) or `python senses\rvc.py "Rick Sanchez" "Hello there" 0` (writes `rvc_test.wav`).
+  - All 7 reference voices are RVC v2 with pitch (32k/40k/48k); they load with no missing parts.
+  - **Speed (measured 23 Oct 2026, CPU, 6 threads, Rick):** about 1.5 s of work per 1 s of speech once warmed up (it was 2–2.8 s before `convert()` stopped making the 1 s of padding on each side). The first sentence after startup is much slower (loading RMVPE took ~34 s the first time while OneDrive was busy). The voice network's decoder is most of the time; an ONNX version of it was not faster, so it stays in torch.
+- **Emotion in the voice, `senses/voice_emotion.py`:** each sentence gets a mood (happy, excited, sad, angry, surprised, soft, scared or neutral) from `*actions*`, emojis, `!`/`?!`, laughing ("haha"), `~`, a few keywords and VADER sentiment. A mood lasts into the next 1–2 sentences, fading. The mood sets the speed and loudness (`EMOTIONS` table) and sends an `expression` event so her face matches while that sentence plays.
+- **Human-sounding speech, `senses/expressive.py`** (the pitch part of emotion lives here now, it used to be a tiny "+Hz" that you couldn't hear):
+  - **Melody:** `plan()` turns the mood into a pitch curve (`STYLES`: mean, slope, bounce, tremble, tone, drive). Questions rise, statements fall, happy bounces, sad sinks, scared shakes, surprised starts high. `shape()` moves the pitch with WSOLA + variable-speed playback (length stays the same), BEFORE RVC, so clones follow it. Measured: happy ≈ +13 %, excited ≈ +25 %, surprised starts ≈ +30 %.
+  - **Sound:** `finish()` (after RVC) makes it brighter / darker, adds a bit of edge for angry, puts a breath before it and a pause after it (longer after `...` and `?`).
+  - **Pauses inside a sentence:** `split_pauses()` voices the pieces around `...` and dashes separately with real silence between them.
+  - **Breaths and sounds:** a soft breath before her first sentence (70 %) and before long ones. `vocalize()`: `*sighs*` / `*gasps*` become a real sigh / gasp, and `*giggles*` / `*laughs*` / `*chuckles*` are said ("Hehe!", "Haha!", "Heh.").
+  - **Pronunciations:** `pronounce()` uses a built-in English list (`BUILT_IN`: idk, btw, AI, °C…) plus your own in `data/pronunciations.json` (Settings → Voice & camera → **Pronunciations**, `app.py` `get_pronunciations` / `save_pronunciations`). Yours win.
+  - The AI is also told (system notes in `pinakamain.py`) to show feelings with short *actions*, `...` and `!`/`?`.
+  - Wired in `brain/pinakamain.py` `SpeechStream._push` → `synth_voice(..., style)` (`VOICE_EMOTION`, `VOICE_NATURAL`). Any error falls back to the plain voice.
+  - UI: Characters → **Emotion in voice** slider (0 = flat, 100 = normal, 150 = very expressive, saved as `emotion`) and the **Natural speech** checkbox (breaths, pauses, melody; saved as `natural`).
+  - Tests: `tests/test_voice_emotion.py`, `tests/test_expressive.py`.
+  - It's rule-based, not a trained model: training a real emotional TTS needs a GPU and hours of recorded emotional speech.
+
+### The game (`game/` Python rules engine + `ui/game/` three.js page)
+- **How to play:** in the sidebar, click **Adventure** → loading screen → title → portal cinematic → character creation (it has a 🎲 Randomize button) → the world.
+- **Python side (`game/`):**
+  - `campaign.py` is the game itself, plus `combat.py` and `world.py` (world map/genres).
+  - `layout.py` builds each 3D place: biome pools, per-place palettes, set pieces, and a navigation grid with validation and repair.
+  - Also `actors.py`, `inventory.py` (shops, wandering trader, reforge), `dm.py` (AI Dungeon Master with offline fallback), `voices.py` (Kokoro online / Piper offline per speaker) and `api.py`.
+- **Data (`game/data/*.json`):** all content.
+  - `biomes.json`: 29 biomes.
+  - `setpieces.json`: 53 little scenes.
+  - `enemies.json`: 62 enemies, 12 bosses, plus summons.
+  - `world.json`: genres, NPC roles, place names.
+  - Also items, abilities, classes, species and cards.
+- **Client (`ui/game/`):**
+  - `main.js`: the game loop, loading screens, portal cinematic, battle director, shops, settings.
+  - `world.js`: ground, paths, faceted low-poly water, scenery drawn in batches.
+  - `characters.js` (actors), `anim.js` (procedural and species animation), `retarget.js` (puts the Universal Animation Library clips on any humanoid).
+  - `assets.js`: loading with texture sharing, `preloadAll`, and `release()` to unload models from places you've left.
+  - `audio.js`: generated music themes, ambience, creature sounds, voice ducking and a **watchdog** that brings sound back.
+  - Also `vfx.js`, `dice3d.js` and `ui.js`.
+- **Asset pipeline (`game_tools/`):**
+  - `build_game_assets.py` with `jobs`, `copy` and `catalog`. The catalog step is **resumable**: it remembers finished files, so use e.g. `CATALOG_BUDGET=140` and re-run until it's done.
+  - Also `blender_convert.py` (FBX→GLB in Blender), `fix_materials.py` (repairs invisible converted models), `shrink_textures.py`, and `dev_server.py` (browser testing: `python game_tools/dev_server.py 8770`, then open `http://localhost:8770/game/index.html?bridge`).
+
+## 4. What was done in the last sessions (newest first)
+
+- **UniMate: big game rigs slimmed (31 Oct 2026, newest)**: the owner put the same `invincible_vs_omniman.glb` in Downloads, so the real error showed up: "248 joints outside [4, 180]". The rig has 249 bones (Source/SFM: arm and leg driver bones, lips, brows, eyes, tongue, cape). UniMate's model takes at most 71 (`max_joints` in its config).
+  - New `skills/slimrig.py`: makes a copy of the .glb with at most 70 bones.
+    - It removes end bones one at a time: helper and face bones first, then the ones that move the least skin.
+    - A removed bone's skin weights go to its parent, keeping the best 4 per vertex, summing to 1. Inverse bind matrices stay with their bones.
+    - Removed bones also leave the node tree and the animation channels. Meshes, materials and textures are untouched.
+  - `skills/animate.py`: before "Reading the skeleton", a rig over 70 bones is slimmed into `work/slim/`. The progress line says "This rig has 249 bones; UniMate takes 70…".
+  - Checked with the real UniMate on this PC: Invincible 249 → 70 bones in about 2 s, then a walk was made. It was viewed in three.js and the body and cape move without tearing.
+  - Tests: `tests/test_slimrig.py` (new, 3). Full suite: 712 tests OK (3 skipped).
+  - Still to do: pull this on the other PC and animate Invincible again.
+- **UniMate check on this PC (31 Oct 2026)**: the owner asked to fix the UniMate error ("stage 4 produced no cond" for `invincible_vs_omniman.glb` on the other PC, in `D:\THIS PC\Downloads\...`).
+  - Tried here with the real UniMate: two characters merged into one .glb (Pikachu + Greninja) and a path with spaces (`THIS PC\work dir`). Both made a walk without errors, so neither is the cause.
+  - A model with no bones fails differently ("No armature found"). The Invincible model has bones, so its real reason is only in that PC's `asset/work/features/extract_errors.log`. The model file isn't on this PC.
+  - `skills/animate.py`:
+    - `has_skeleton(path)` reads the .glb header. `_read_skeleton` stops at once with "Press Rig it first" when there are no skins (no slow conda start), and also turns UniMate's "No armature found" into that message.
+    - `skip_reason` falls back to the last line of `extract_errors.log`. The popup now shows the real error instead of "produced no cond".
+  - Tests: `tests/test_kitchen_unimate.py` (+2). Full suite: 709 tests, OK (3 skipped).
+  - Still to do: pull this on the other PC and try Invincible again. The popup will then name the real error.
+- **Fixes & Game Night polish round (31 Oct 2026)**: the owner sent screenshots from another PC with 11 asks.
+  - **UniMate "stage 4 produced no cond"** (`skills/animate.py`):
+    - `skip_reason(asset)` reads UniMate's reason from `work/features/filtered_clips.json`, and `explain(reason)` puts it in plain words with what to do (too few/many joints, no skeleton, zero-length bones).
+    - `_read_skeleton` runs `rig_preprocess`. When the reason is "horizontal separation" (a model lying down), it tries again with each `--rest_rotation` in `TURNS`.
+  - **Study** (`ui/study.js`, `ui/studylife.js`, `ui/studyplay.js`, `skills/studylife.py`, `app.py`):
+    - The Play tab is gone. Flashcards and Ask my library are parts of My study (`initPlay(api, ids).open(mode, into)`).
+    - `citationBox` moved to Research.
+    - `courses(files, ask)` has the AI name each file's general course once, then saves it; offline it falls back to the subject or a guess. `course_list` feeds the Formulas buttons, and `formula_for_subject` matches by course.
+    - `study_save_score` gives XP only on the first attempt of the day and only when score > 0. "Check my answers" waits for an answer and is disabled after a check.
+  - **Planner** (`ui/planner.js`): the "Before my…" situation reminder was removed.
+  - **Tabs** (`ui/style.css`): `.tabs` stay on one line with a thin scroll bar. Tab and primary buttons no longer move on hover/press, so one click always lands. The Settings red dot (`has-update`) was removed from `ui/app.js` and the CSS.
+  - **Runs on the phone only**:
+    - The Runs tab and its code left `ui/gym.js` and `ui/gymlife.js`.
+    - `app.py` `_phone_handlers` gains `gym_runs`, `gym_run_save` and `gym_run_remove`.
+    - `ui/phone/index.html`, `phone.js` and `phone.css` add a 🏃 Run tab (watchPosition, wake lock `runLock`, live route). `sw.js` cache is `vermeil-phone-4`.
+  - **Game Night**:
+    - `skills/gamenight.py`: `SEPARATE = {"adventure", "retro"}` stay out of `library()` unless `everything=True`; `skills/recap.py` uses `everything=True`.
+    - `ui/games/closeup.js` (new): her `anime_girl.glb` framed on the head in a right-hand panel styled like the hub preview. Mouse look, blinks, face moods, mouth while talking, clips on `react(clip, face)`, poke. With no WebGL it shows a big 💜.
+    - `ui/games/gnfx.js` (new): WebAudio synth `sound(kind)`, confetti, emoji `burst`, `shake`, `flash`. It follows the hub mute and reduced motion.
+    - `ui/games/night.html/js/css`: the old line above the game is gone (she talks in her panel with typed text). There is a 🔊 mute, and every game has sounds and animations (chess drop/check, card deal and pile, Words flip, hangman lines, puzzle solve, escape key burst). Library cards rise in turn.
+  - `ui/mock.js`: `study_subjects` returns courses.
+  - Tests:
+    - `tests/test_gamenight.py` (separate games), `tests/test_studylife.py` (`CourseTests`, 2), `tests/test_app.py` (phone run handlers; review XP guard), `tests/test_kitchen_unimate.py` (`UnimateSkipTests`, 2).
+    - Full suite: 707 tests, OK (3 skipped).
+    - Browser (dev server 8770): Game Night close-up and poke, resign reaction, narrow layout, Words reveal; Gym tabs; Study tabs, Formulas course buttons, Citations in Research; phone Run tab.
+    - Not tried: a real GPS run on a phone, and UniMate on the other PC.
+  - No new pip packages.
+- **Music & life round (31 Oct 2026)**: the owner asked for "all of the rest" of the picked ideas: 142, 146, 147, 150, 151, 155, 156, 198 and 200 from FEATURE_IDEAS.md. GodsWar was left out on purpose, because the owner wants to change something there first.
+  - **Music extras** (`skills/medialife.py`, new; saves to `data/medialife.json`; the web, AI and mic calls take `fetch=`/`ask=`/`rec=`/`recognize=` so tests fake them):
+    - Synced lyrics from LRCLIB (`/api/get`, then `/api/search`) or lyrics.ovh (words only). They are cached and work with `parse_lrc`, `line_at` and `clean` (strips "(Official Video)" and similar).
+    - "More like this": the AI picks about 12 songs. `like_this_youtube` queues them in Vermeil Music, and `like_this_spotify` uses the new `spotify.play_uris`.
+    - Album covers: `make_cover(pid, style, name_on)` paints with the image Generator and saves a JPEG data URL on the playlist. It gives draw XP.
+    - "What song is this?": `identify` records 8 s (`app` clamps 4–15 s) and asks Shazam through `shazamio` (optional). The last songs are kept in `heard`.
+    - Watchlist: `watch_add/where/toggle/remove/list` and `watch_suggest(genres, kind)`. "Where to watch" is an AI guess for the owner's country.
+  - **Clean-up wizard** (`skills/cleanup.py`, new):
+    - `scan` finds big files, old downloads and duplicates (size, then hash) in the user folders, including OneDrive.
+    - It never looks in Vermeil's folder, `dnd`, voice-model folders or system folders.
+    - `to_recycle_bin(ids)` only moves files from the last scan that haven't changed since. It uses send2trash if installed, otherwise Windows `SHFileOperationW` with undo.
+  - **Yearly recap and gift** (`skills/recap.py`, new; saves to `data/recap.json`):
+    - Recap: `numbers(year)` collects quest XP per year, focus, gym, music history and Game Night. `slides` makes the cards, and `year_recap` adds an AI note (cached per day, with a fallback).
+    - Gift: `gift_check` runs once per ISO week. A hard week means XP ≥ 1.4× the usual and ≥ 700, 10+ h of focus, or 5 workouts. The gift is VCash (100 + xp/20, at most 300), a note and a treat. `gift_open` pays it out via `quest.give_vcash`.
+  - `skills/quest.py`: `award` also keeps whole-year totals in `years`. `skills/spotify.py`: `play_uris`.
+  - `app.py`:
+    - `mm` gains lyrics, lyrics_sources, like_this, listen, heard, make_cover, cover_styles and watch_*.
+    - New methods: `spotify_like_this`, `cleanup_scan`, `cleanup_trash`, `recap_year`, `gifts`, `gift_open`.
+    - `_gift_check` runs from `_alert_loop` after 6 pm, once a day, and emits a `gift` event.
+  - UI:
+    - `ui/visualizer.js` (new) keeps the beat from the song's BPM (`gn_bpm`). The Smart TV in `ui/shop.js` draws rainbow bars, and the lamps in `ui/cozyroom.js` pulse. It is turned on with 🌈 in Music.
+    - `ui/mymusic.js`: 🎤 lyrics (source picker, click a line to seek), ✨, 👂 with the heard list, 🌈, a cover maker on playlists, and a 🎬 Watchlist tab.
+    - `ui/spotify.js`: a ✨ button.
+    - `ui/quest.js`: a "🎁 Your year" tab with a full-screen story, and the gift card on top of the Battle Pass.
+    - `ui/cleanup.js` (new) under Settings → General.
+    - Also `ui/app.js`, `index.html`, `style.css` and `mock.js`.
+  - FEATURE_IDEAS.md: 85 ideas that are now built were replaced with new ones, so every number there is still to do.
+  - Tests:
+    - `tests/test_medialife.py` (13), `tests/test_recap.py` (8), `tests/test_cleanup_wizard.py` (4; named so because `test_cleanup.py` is the package clean-up).
+    - Full suite: 702 tests, OK (3 skipped).
+    - Browser (ui-dev 8770, `?mock`): lyrics sync and seek, the extras buttons, heard list, watchlist and suggestions, cover maker, gift card → VCash popup, the recap grid and story (Escape closes only the story), clean-up scan → tick → move, TV bars and lamp pulse.
+    - Not tried: a real mic with Shazam, real Spotify, and a real clean-up scan on the PC.
+  - New optional pip package: `python -m pip install shazamio`
+- **Adventure round (31 Oct 2026)**: the owner picked ideas 102, 104, 105, 106, 107 ("an appraisal feature for chances of boosted stats … the stats should not have a fixed rate … a max range of high and low"), 126–135 and 138–140 from FEATURE_IDEAS.md. GodsWar ideas were left for later on purpose.
+  - **Dungeon Adventure** (`game/extras.py`, new):
+    - Day and night: `clock` minutes on the campaign (a new one starts at 08:00), `advance` (walking, resting, battles), `phase`, `sky`. At night outdoor places can bring night monsters (`NIGHT_MONSTERS`, `maybe_night_encounter`).
+    - Pets and mounts: after a win against a tameable beast there is a chance to tame it with food (`tame_offer_roll`, `tame`). Up to 6 pets; the active one gives a perk (gold, heal or ride). Riding means faster travel and fewer ambushes. Also `pet_set`, `pet_ride`, `pet_release`, `pet_rename`.
+    - Crafting: gear + material points + gold → one rarity better, and it comes out unappraised (`craft_services`, `craft`).
+    - Appraisal: every stat has a low–high range (`stat_ranges`). Appraising rolls anywhere in it, so the same item can come out stronger or weaker; the top 20% is "boosted", with grades S–D. Appraise again (it costs more) and choose to keep the old roll or take the new one (`appraise`, `appraise_choose`).
+    - 3 save slots (`CAMPAIGN_SLOTS`, `pick_slot`).
+  - `game/campaign.py`: the sky and clock in the state, and test_tool `pet`/`materials`/`clock`. `game/api.py`: the new calls; buy/sell return the shop services so the craft tab refreshes. `app.py` `GAME_METHODS` gains pets, tame, pet_set, pet_ride, pet_release, pet_rename, craft, appraise, appraise_choose and campaigns.
+  - UI: `ui/game/main.js` (the hero name over the camp log, the slot picker, the tame dialog, the pets panel, the craft and appraise shop tabs, a clock in the HUD), `ui/game/world.js` (`atmo`: the sky darkens at night), `ui/game/characters.js` (`rideLift`), and `ui/game/ui.js`, `index.html`, `game.css`.
+  - **Game Night with Vermeil** (`skills/gamenight.py`, new; saves to `data/gamenight.json`; the AI calls take `ask=`/`see=` so tests fake them):
+    - Library: hours, times played, wins and favourites per game (`record`, `library`, `toggle_fav`). Weekly tournament: win +3, draw +1, ISO week; the winner gets a trophy when the week rolls over (`tournament`, `_roll_week`).
+    - Puzzle of the day with a streak: sudoku (one solution, `make_sudoku`, `_sudoku_solve`) and a 10×10 nonogram (`daily_puzzle`, `puzzle_check`).
+    - Trivia with categories (`trivia`; `TRIVIA_BANK` if the AI fails). Five letters and hangman in several languages (`words`; other languages are asked from the AI once and cached).
+    - Typing words from your study cards (`typing_words`), escape rooms from your study topics (`escape_topics`, `escape_room`, `escape_check`), the drawing game both ways (`her_doodle`, `doodle_check`, `draw_prompt`, `guess_drawing` with the vision AI) and song tempos for the rhythm game (`song_bpm`, cached, folded into 70–190).
+  - `app.py`: `gn_library`, `gn_record` (+5 XP on a win), `gn_fav`, `gn_puzzle`, `gn_puzzle_check` (+8 XP), `gn_trivia`, `gn_words`, `gn_typing`, `gn_escape_topics`, `gn_escape`, `gn_escape_check`, `gn_doodle`, `gn_doodle_check`, `gn_draw_prompt`, `gn_guess_drawing`, `gn_bpm`.
+  - `ui/games/night.html`, `night.js`, `night.css` (new): tabs Library, Chess (her own engine: negamax with alpha-beta and quiescence, castling, en passant, promotion, 3 levels), Cards (Color Clash, an Uno-style game with the Uno call, and Go Fish where she remembers your asks), Trivia, Words, Draw, Puzzle of the day, Typing, Rhythm (songs from your playlists, D F J K), Escape room and Tournament. `?tab=` opens a tab. Slow AI replies are ignored if you already left the tab.
+  - `ui/games/index.html`, `games.js`, `games.css`: the Game Night card; retro games now count their play time in the library.
+  - Retro save states on the phone: `brain/phone.py` serves `/phone/retro/player.html`, `emulatorjs/**` and `roms/**` only with the `vk` key cookie (safe segments, realpath check), and saves up to 32 MB. `app._phone_retro()` adds retro_library/prepare/progress/save/load. `ui/phone/*`: a 7th tab "🕹 Games" with favourites and recent games; the save is backed up when you close. `sw.js` cache is vermeil-phone-3.
+  - `skills/sensei.py`: Talk live gains restaurant, train, pharmacy, bank, landlord, phone call, complaint and date scenes.
+  - `game_tools/dev_server.py`: `gn_*` and `mm` work with `?bridge` (a stand-in `_GN`; data goes to the test save folder).
+  - Tests:
+    - `tests/test_adventure_extras.py` (9), `tests/test_gamenight.py` (12), `tests/test_app.py` +1 (`test_game_night_wiring`).
+    - Full suite: 677 tests OK (skipped=3).
+    - Browser (dev server 8771, `?bridge`): every Game Night tab with the real AI (chess replies on Easy and Hard, Color Clash, Go Fish, trivia, five letters, hangman, both draw modes, sudoku, nonogram, typing from study cards, rhythm, an escape room door, the tournament) and the hub card. Adventure: crafting, appraise/again/choose, taming and riding, night sky.
+    - Not tried: a retro game on a real phone.
+  - No new pip packages.
+- **Gym & health (31 Oct 2026)**: the owner picked ideas 81 ("plus a UniMate gym button"), 84 ("heavier only when all max reps are done in all sets"), 88, 89 ("prices from the nearest mall: SM in PH, Walmart in the US"), 91 ("required hours, make-up suggestions, progress in Focus"), 92, 93, 94 ("Strava-like GPS"), 97 and 98 from FEATURE_IDEAS.md.
+  - `skills/gymlife.py` (new). It saves to `data/gymlife.json`. The AI call takes `ask=` so tests can fake it.
+    - `next_weights(days, last_fn)`: +2.5 kg (+1.25 under 10 kg) only when every planned set was done AND every set hit the top of the rep range; otherwise it says which sets fell short.
+    - `adjust_plan(log, days, next_day, today, per_week)`: when there are more workouts left this week than days, today adds the next day's first 2 lifts (3 sets). After 10+ days off it is a comeback week (about 80%).
+    - `prs(log, e1rm, rep_value)`: best estimated 1RM, heaviest and most reps per exercise. The top 3 get 🥇🥈🥉, and `new` marks records from the last 7 days.
+    - `week_muscles(log, muscles_for)`: `{muscle: 0..1}` for the last 7 days, fading by days ago.
+    - `protein_target` (2 g/kg, 1.8 on a bulk) and `protein_bar`.
+    - `grocery_list(plan, days=7)` turns the meal plan into buy amounts. `grocery_prices(items, country, ask)` asks the AI for SM Supermarket (₱) or Walmart ($) prices, cached for 7 days; `country_for(home_city)` picks the store.
+    - Sleep: `sleep_settings`/`sleep_save` (hours needed, bedtime, wind-down minutes), `sleep_report(sleep, need, bedtime)` (7 nights, debt, met nights, streak, make-up tips: up to 1 h earlier for 4 nights, naps, no sleeping in) and `wind_down_due`.
+    - Supplements: `supp_save`, `supp_remove`, `supp_take` (with undo), `supp_list` (per-time slots, due flags, a 7-day count) and `supp_due` (each slot reminded once, within 2 h).
+    - Runs: `run_stats(points)` (haversine; skips GPS jumps over 12 m/s, fixes worse than 50 m and jitter under 2 m; pace, steps, kcal), `run_save`, `runs` (week km/steps, best pace, longest) and `run_remove`.
+    - `demo_for(name)` / `DEMOS` / `DEMO_PROMPTS`: exercise name → demo move (word-boundary regexes, so "Stretching" is not "chin").
+  - `app.py`:
+    - New API methods: `gym_next_weights`, `gym_coach_plan` (setting `gym_days_per_week`, default the routine's day count, max 6), `gym_prs`, `gym_week_muscles`, `gym_protein`, `gym_grocery(country, goal, meals)`, `gym_sleep_report`, `gym_sleep_save`, `gym_supplements`, `gym_supp_save`/`_remove`/`_take`, `gym_runs`, `gym_run_save` (+XP) and `gym_run_remove`.
+    - `_gym_reminders()` in `_alert_loop`: one wind-down alert before bedtime per day (setting `sleep_reminder`, default on) and supplement alerts.
+    - `progress()` adds `sleep` for Focus → My progress.
+  - `skills/animate.py`: the PROMPTS gain squat, lunge, deadlift, pushup, curl, row, press, plank and jumping_jacks.
+  - UI:
+    - `ui/gymlife.js` (new): `coachBanner`, `drawCoach` (next week's weights + "Save the heavier weights", muscles this week, PR wall), `drawHealth` (sleep, supplements, grocery list), `drawRuns` (GPS with `watchPosition`, live distance/time/pace/steps, route drawing, past activities), `proteinBar`, `sleepBars`, `routeSvg` and `demoKey`.
+    - `ui/gym.js`: new tabs Coach & PRs, Sleep & health and Runs. The coach banner sits on Workout, each exercise gets "👯 Demo", the protein bar is under Today's meals, and the meal goal is remembered (localStorage `mealGoal`) for the grocery list.
+    - `ui/muscles.js`: `muscleMapWeighted(weights)`.
+    - `ui/room.js`: `demoExercise(key)` plays the model's own clip when UniMate made one (those clip names are now loaded); otherwise a simple body motion (`ex_*` emotes).
+    - `ui/app.js`: a `gym-demo` listener opens the gym room and calls `room.demoExercise`.
+    - `ui/rigger.js`: `GYM_MOTIONS` and a "🏋 Gym exercises" button in the UniMate box that ticks them all.
+    - `ui/focus.js`: a sleep card in My progress.
+    - Also changed: `ui/mock.js` and `ui/style.css`.
+  - Tests:
+    - `tests/test_gymlife.py` (13).
+    - `tests/test_app.py` +1 (`test_gym_health_wiring`): next weights, protein goal, sleep in progress, a supplement reminded once, and SM prices for a Manila home city.
+    - Full suite: Ran 655 tests, OK (skipped=3).
+    - Browser (`ui-dev` ?mock): every new tab works. Tried there: the coach banner, saving the heavier weight, the muscle map and PR wall, the sleep card, ticking a supplement, a Walmart grocery list, a faked GPS run (live stats → saved with its route), the protein bar, the Focus sleep card, and Demo for 5 moves with no errors.
+    - Not tried: real GPS outdoors, real AI prices, or a UniMate-made exercise clip.
+  - No new pip packages.
+- **Study round (31 Oct 2026)**: the owner picked ideas 62, 63, 65 ("grouped by subject (hydrology, RCD, steel)"), 67 ("plus merging duplicate topics"), 70, 72, 73, 74, 76, 77, 78, 79 and 80 from FEATURE_IDEAS.md.
+  - `skills/studylife.py` (new). It saves to `data/studylife.json`. Every AI call takes `ask=` so tests can fake it.
+    - Today's list: `today_list(due, cards_due, mistakes_n, weak, exam)`.
+    - Practice exams: `exam_report(review, results)` scores each source file and gives a grade.
+    - Mistake notebook: `add_mistakes` (deduped by question), `mistakes` and `mistake_done`.
+    - Grades: `grade_calc`, which works out "what do I need on the final", plus `grade_save` (weights must add to 100) and `grade_remove`.
+    - Citations:
+      - `cite(fields, style)` writes APA 7 / MLA 9 itself, without the AI.
+      - `cite_lookup` reads a link's `<meta>` tags, or asks the AI for a book's details. Unknown books are refused.
+    - Essay coach: `essay_outline` and `essay_feedback`.
+    - Handwritten notes:
+      - `photo_notes`: `academic.read_image_text`, then the AI, then `save_note`, which joins a note on the same topic and subject (subset, or ≥ 60% word overlap) and drops repeated lines.
+      - `merge_duplicates` joins duplicates afterwards.
+    - Video chapters: `chapters(file_id)` uses the `[mm:ss]` transcript lines and is cached per file.
+    - Formula sheets: `formula_for_subject(subject, files)` runs `studygame.formula_sheet` on that subject's files and adds the notebook's formulas. `subjects()` always includes Hydrology, RCD and Steel.
+    - USB: `guess_subject(path, known)` (your own subject names come first, then `KEYWORDS`), plus `usb_new` and `usb_mark`.
+    - Exam week: `exam_state`, `exam_save`, `exam_active` (on, and the last exam is ≤ 14 days away), `exam_plan` and `EXAM_CHAT_NOTE`.
+    - `fact_of_day` is cached by date.
+    - `pron_coach(expected, heard, missed, language)`.
+  - `app.py`:
+    - New API methods: `study_today`, `study_fact`, `study_mistakes`/`_done`, `study_grades`/`_save`/`_remove`, `study_cite`/`_fields`, `study_essay_*`, `study_photo_notes`, `study_notebook`, `study_merge_notes`, `study_note_remove`, `study_chapters`, `study_subjects`, `study_subject_formulas`, `study_usb_new`/`_import`/`_skip`, `study_exam`/`_save` and `study_exam_report`.
+    - `study_save_score` now saves wrong answers to the mistake notebook. The subject comes from the review's files.
+    - `sensei_pronounce` adds `coach` when the score is below 90.
+    - `study_add_paths(..., subject="auto")` guesses each file's subject.
+    - `_exam_bedtime()` in `_alert_loop` gives one alert 30 minutes before bedtime during exam week.
+    - `_apply_settings` sets `pm.exam_week`.
+  - `brain/pinakamain.py`: `exam_week` hook, and `_extra_notes` adds `EXAM_CHAT_NOTE` during exam week.
+  - UI:
+    - `ui/studylife.js` (new) is the "My study" tab: Today, Mistakes, Grades, Notes, Formulas, Chapters, Citations, Essay and Exam week, plus the curiosity card. It also exports `coachTips` and `examReport`.
+    - `ui/study.js`:
+      - "My study" is the first and default tab. Pane and tab ids use `-` instead of spaces.
+      - The exam report shows after timed reviews.
+      - Pronunciation tips show.
+      - The USB banner has "Import & sort by subject".
+    - Also changed: `ui/mock.js` and `ui/style.css`.
+  - Tests:
+    - `tests/test_studylife.py` (18).
+    - `tests/test_app.py` +1 (`test_study_round_wiring`): a mistake is saved after a review, the exam report, the exam-week chat note, and USB auto-subject.
+    - Full suite: 641 tests OK (3 skipped).
+    - Browser (`ui-dev` ?mock): every My study section works. Tried there: a grade is saved with the needed final, notes merged, a formula sheet, a citation, the essay outline and feedback, exam-week rows, a USB plug-in → import, the timed review report, and the pronunciation tips.
+    - Not tried: real photo OCR, a real AI, or a real USB drive.
+  - No new pip packages.
+- **Focus & planning (31 Oct 2026)**: owner picked ideas 41, 42 ("integrate a browser inside the app"), 47, 48, 50 (with a travel planner), 52, 55, 56, 57 ("should mute all notifications") and 58 from FEATURE_IDEAS.md.
+  - `skills/planlife.py` (new). It saves to `data/goaltree.json`, `data/screentime.json` and `data/travel.json`.
+    - Hard lock: `UNLOCK_SENTENCE` and `unlock_ok`.
+    - Site blocking: `BLOCK_SITES` and `site_blocked(title, sites)`. Only browser window titles count.
+    - `break_idea`, `week`, `move_item` and `countdowns`.
+    - `heatmap(habits)`.
+    - Goal tree: `goals`, `goal_add`, `goal_toggle` and `goal_remove`. Removing a goal also removes its sub-goals.
+    - Screen time: `screen_sample`, `screen_today` and `screen_week`. It keeps 5 weeks.
+    - Travel planner: `travel_plan(req, ask)`, `travel_swap`, `travel_edit`, `travel_saved` and `travel_links`.
+      - The 1-5 price level is turned into words in the prompt.
+      - A swapped stop goes into `request.avoid`, so it is never suggested again.
+      - Totals are recalculated after every change.
+  - `app.py` settings: `focus_hard_lock`, `focus_sites`, `focus_sites_list`, `focus_mute`, `screen_time`, and `focus_mute_restore`, which is internal and skipped by save_settings.
+  - Muting Windows notifications:
+    - `_windows_toasts(on)` turns off HKCU …\Notifications\Settings `NOC_GLOBAL_SETTING_TOASTS_ENABLED` during focus and restores the old value afterwards.
+    - On startup it restores the old value if the app closed during a session.
+  - Holding her reminders: `check_alerts` keeps alerts in `_held_alerts` while `_focus_working()` is true (a work round) and focus_mute is on.
+  - Site blocking:
+    - `_focus_block_loop` also runs when only focus_sites is on.
+    - `_focus_other_window(..., sites_only)` always hides a blocked site.
+  - New API methods: `focus_extras`, `focus_unlock`, `week_view`, `week_move`, `habit_heatmap`, `goal_*` and `travel_*`.
+  - `browse_inside(text)` opens a pywebview window.
+    - Plain text becomes a duckduckgo search.
+    - Blocked hosts are refused during focus.
+    - Voice: "search inside for X" and "open X inside" in `_quick_command`.
+  - `_screen_loop` samples the app in front every 30 s. It skips samples when you have been idle for 5+ minutes.
+  - `ui/planlife.js` (new) has the Week (drag and drop), Goals, Habits, Travel and Screen time tabs.
+  - `ui/focus.js` changes:
+    - the new tabs;
+    - the hard-lock sentence box (pasting is blocked, the `st.locking` flag stops the timer from redrawing over it, and Pause/Skip are hidden in work rounds);
+    - break ideas;
+    - ⏳ countdowns;
+    - 🌐 Open inside;
+    - 3 new switches under Lock to Vermeil.
+  - Other UI files: `ui/index.html` (screen_time checkbox), `ui/mock.js` and `ui/style.css`.
+  - Tests:
+    - `tests/test_planlife.py` (12).
+    - `tests/test_app.py` +2: alerts held during focus, and browse_inside plus the voice command.
+    - Full suite: 622 (one phone-upload test is flaky in the full run and passes alone).
+    - Browser (`ui-dev` ?mock): all tabs render, a drag moves a task, a travel plan works and the 🔄 swap works, and the hard lock refuses a wrong sentence and accepts the right one.
+    - Not tried: the real Windows registry mute, or a real pywebview browser window.
+  - No new pip packages.
+- **Vermeil's little life (31 Oct 2026)**: owner picked ideas 22-28, 31 ("add a double clap"), 33, 34, 36, 37, 40 from FEATURE_IDEAS.md.
+  - `skills/herlife.py` (new, `data/herlife.json`): `notice(text)` regex-finds exams/interviews/trips/appointments/feeling sick + when (today/tomorrow/weekday/next week) and stores a follow-up for the day after; `followups_due()`, `asked(id)`. `outfit_for(hour, weather, today, birthday)` (party on birthday, witch Oct 25-Nov 1, santa Dec 15-26, beanie cold/snow/rain, headphones 22-6, cap sunny spring/summer midday, headband morning). Wardrobe: `wardrobe()`, `wardrobe_save/remove/wear`, `current_outfit()` (a worn pick beats auto). `morning(facts)` / `night(facts)` routine texts, `holiday_greeting()` once per holiday per year (uses `roomlife.holiday`).
+  - `app.py`: settings `clap_wake`, `my_birthday` ("MM-DD", validated), `outfit_auto`, `sleep_at_night`, `call_reminders` (all on except clap). New API `her_today()` (outfit with the real weather kind, birthday, greeting, a due question), `her_say(text)` (reply + speak), `her_asked`, `wardrobe*`. `_quick_command` calls `herlife.notice` on every message and answers "good morning"/"good night" with `_routine()` (weather, agenda, top tasks / tasks done, focus minutes) through `pm.quick_line`. `check_alerts` no longer speaks the alert itself when `call_reminders` is on (the window's Answer does).
+  - `senses/wakeword.py`: `ClapDetector` (0.1 s blocks; sharp = peak > max(0.25, 12×floor) and crest > 4; two onsets 0.15-0.8 s apart) + `listen_claps()`; `listen(..., claps=True)` checks claps in the same stream. `brain/pinakamain.py`: `clap_wake` flag; with the trained wake word it passes `claps`, otherwise a clap thread runs next to speech recognition.
+  - Visemes (#34): `pinakamain._lip_shapes()` gives one letter per 50 ms (m/a/e/o from RMS, spectral centroid, ZCR, low-band ratio), sent as `shapes` on the `lip` event; `room.setLip(levels, step, shapes)` picks mouth_eek/mouth_ooo textures or VRM aa/ee/ou.
+  - `ui/herlife.js` (new): phone-call overlay with a WebAudio two-tone ringtone for `alert` events (Answer → `her_say`, Snooze 10 min, missed-call toast after 45 s); polls `her_today` every 10 min (confetti + greeting on your birthday, holiday greeting, asks a due follow-up); `renderWardrobe()` (try-on preview via `room.setOutfit`). `ui/app.js`: `outfit()` now returns `{auto:true, base}` from herlife when `outfit_auto` is on (before: always no hats); `ui/life.js` `autoOutfit` uses `ctx.outfit.base` after gym/study/music; idle plan gets window/music in the afternoon, `ctx.sleep === false` drops the bed at night, more in-place moves. `ui/room.js` idle MOODS got more clips. `ui/index.html` Settings → Her little life: 3 checkboxes, birthday input, Wardrobe; Settings → My wake word: double-clap checkbox. `bootDone()` no longer throws when the 60 s fallback runs after a normal start.
+  - #28 (tone matches the message) was already there: `voice_emotion.detect` per sentence with `VOICE_EMOTION` 1.0 by default.
+  - Tests: `tests/test_herlife.py` (6). Full suite: 608. Browser (`ui-dev` ?mock): Halloween greeting then "How did your exam go?", witch hat, call overlay → Answer speaks the reminder, wardrobe renders. Not tried: a real double clap on a microphone, a real reminder in the app.
+  - No new pip packages.
+- **VCash shop, living room, Adventure voice (31 Oct 2026)**: owner picked room ideas 2-6, 9, 11, 12, 14 ("our coins/currency in game will be called vcash"), 16, 17, 189 (themed furniture like a levitating moon chair), and asked the DnD TTS to match the main room.
+  - `skills/quest.py`: VCash (`VCASH_PER_XP = 0.5`, back-filled for old saves), `buy(key, price, name)` (once; owned list), `give_vcash`, `season()` (space/ocean/fantasy by month), `weekly_pick()`; `state()` adds `vcash`, `owned`, `season_now`.
+  - `skills/roomlife.py` (new): room designs (`data/room_presets.json`), photos (folder from Settings `photo_folder`, default ~/Pictures; PIL thumbnails as data URLs), `weather_kind`/`weather_widget` (30-min cache), `plant()` stage/wilt from 14-day focus minutes, `top_tasks()`, `holiday()`, `decor()`, `ACHIEVEMENTS`/`achievements()`, `TIPS`/`tip()`.
+  - `app.py`: `room_presets*`, `photo_folder_pick`, `photo_list`, `photo_data`, `room_weather`, `room_plant`, `room_tasks`, `room_extras(sets)`, `quest_buy`.
+  - `ui/shop.js` (new): 18 themed shop pieces (3 sets × 6, animated through `userData.tick`), `LIVING_CATALOG` (photo frames 6 styles × 3 sizes, Smart TV, weather clock, focus plant, top-3 tasks board), `buildDecor()` (halloween/christmas/valentine/seasons), `ambient` WebAudio sounds. `ui/livingroom.js` (new): `initLivingRoom()` (shop tab cards and header, Designs and Sounds panes, TV player and forecast popups, decor + weather refresh). `ui/cozyroom.js`: merges the catalogs, rain/snow drops on the big window (`setWeather`), `setDecor`. `ui/app.js`: 🛒 Shop and 🖼️ Photo frames categories, 💾 Designs and 🔊 Sounds panes, boot tips.
+  - `game/voices.py`: `main_room_voice()` / `natural_voice()` so the Adventure companion uses the main-room pipeline (Kokoro + RVC clone + emotion + pauses); other speakers unchanged. Test in `tests/test_game.py`.
+  - Tests: `tests/test_livingroom.py` (8). Full suite then: 602 tests, OK (3 skipped). Browser: shop buy (900 → 0 VCash), Halloween decor, rain, forecast, Designs and Sounds panes, all 205 catalog items build.
+  - No new pip packages.
+
+- **Loading screen, gym room switch, seated hero, 200 ideas (31 Oct 2026)**: owner showed two heroes overlapping on the second log ("they should be sitting only"), wanted "Starting up" to be a loading screen, a switch to the gym room in Edit room, and 200 feature suggestions.
+  - `ui/game/main.js`: `walkToLog`/`walkAway`/`HERO_FROM` removed (a hero that was walking away stopped being updated and froze on the log next to the new one). `seatOnLog(a)` puts the picked hero on `HERO_LOG` already seated (`a.anim.seat = {h: HERO_SEAT, w: 1}`, no easing) facing the fire; `letGo()` disposes the old one at once. Checked: fast switching Goblin→Elf→Human→Ranger→Goblin→Human→Warrior leaves one seated hero.
+  - `ui/index.html` + `ui/style.css` + `ui/app.js`: `#boot` full-screen loading screen (logo, name, bar, `#bootStep`); `bootStep(text, frac)` at each startup stage, `bootDone()` after `loadCharacter()` (also on a startup error and after 60 s at most), fades out and removes itself.
+  - `ui/index.html` + `ui/app.js`: `#editGym` button in the edit bar; `syncGymSwitch()` labels it "🏋 Gym room" / "🏠 My room"; click → `room.setGymRoom(!room.gym, null, state.ui.gym_layout)` then `setEditing(true)` (setGymRoom leaves edit mode). `room.layout()` already returns the home layout while in the gym, so saving never overwrites your room with the gym.
+  - `FEATURE_IDEAS.md` (new): 200 numbered ideas (New/Upgrade) in 11 groups.
+  - Tests: no new tests (UI only). Full suite: 593 tests, OK (3 skipped). Browser: loading screen then room (`ui-dev` ?mock), gym switch both ways in edit mode, no console errors; game (`game-test-offline`) one seated hero after fast switching, no console errors.
+  - No new pip packages.
+- **Two-log camp, Lock to Vermeil focus mode (31 Oct 2026)**: owner saw ten heroes on the bench ("what are these extras, it should be 2 logs only, 1 for my ai character, and 1 for my selected character") and wanted focus blocking to lock the PC to the app only.
+  - `ui/game/main.js`: the 3-log bench and its sitters are gone (`BENCH`, `ringAt`, `benchSeat`, `STAND`, `seatHeroes`, `sitDown`, `aroundFire`, `standUp`, `backToSeat` removed). One extra log at `HERO_LOG`; `preview()` makes the picked hero walk in from `HERO_FROM` (`walkToLog`: greet + victory sound, weapon flourish, `anim.sit(HERO_SEAT)`), and the previous one walks off and is disposed (`letGo` → `walkAway`). `CREATE_SHOT` = `[V3(2.0,2.0,7.0), V3(3.5,0.9,1.1)]` frames the hero right of the panel. `portalCinematic` swallows the camp solos, Vermeil and the player hero only.
+  - `app.py`: settings `focus_block` (default on) and `focus_allow_words` (replaces `focus_block_words`). `_FOCUS_SHELL` window classes, `_focus_other_window()`; `_focus_block_loop` (Windows only) minimizes every other visible window at the start (toast with the count), then during work rounds minimizes any other foreground window once a second and logs it as a distraction; breaks (from `started`/`work`/`break`) and session end stop it. Not in our process, the shell/taskbar, or a title with "vermeil" or an allow word.
+  - `ui/focus.js`: block box is now "🔒 Lock to Vermeil" with an "Also allow" input.
+  - Tests: no new tests (UI/Windows-window behaviour). Full suite: 593 tests, OK (3 skipped). Browser (`game-test-offline`, port 8771): two logs, warrior → ranger swap, portal pulls both logs/tent/fire/Vermeil/hero in, world loads, no console errors. Focus lock: dry run only (listed the windows it would minimize; nothing minimized), not tried in a real focus session.
+  - No new pip packages.
+- **Adventure camp, black-hole portal, roomier battles (30 Oct 2026)**: owner asked for the "dnd" game: heroes sitting on the other log, a black hole that swallows the camp, no eyes on the warrior/ranger, evenly spaced party and enemies, +XP/+gold sounds, and the voice clone working in the game.
+  - `ui/game/main.js`: title camp props are `solo` objects; a 3-log bench (`BENCH`, `ringAt`, `benchSeat`) with one seated hero per class (`seatHeroes`, `sitDown`; late-loading sitters dispose themselves if the camp is gone). Picking a human class makes that sitter stand up and walk round the fire to `STAND` (`standUp`, `aroundFire`); the previous one walks back and sits (`backToSeat`, `letGo`); other species spawn at `STAND`. `CREATE_SHOT` frames it. `portalCinematic` rewritten: `P.wantHole`, subtitles, then every camp solo / sitter / Vermeil / hero is shaken, lifted and spiralled into the portal (closest first, the two main characters last), the fire light goes out, the camera falls in, black fade. `stepThrough` removed. Battles: `lineSpot`/`lineUp` space party and enemy lines evenly and put a summon right beside its owner; `floatAt` + per-enemy "+N XP" on death and "+N gold" after the battle (`this.fallen`).
+  - `ui/game/world.js`: objects with `solo` get their own group (`this.solos`, with their glow lights). `ui/game/vfx.js`: portal black-hole mode (`uHole`, black core ball, purple/orange rim, inward particles). `ui/game/audio.js`: `xp`, `gold`, `blackhole` sounds. `ui/game/game.css`: `.float.xp`, `.float.gold`. `ui/game/characters.js`: `PAINT_FACE = null` (no painted eyes on any model; Blender renders of Warrior/Ranger.gltf showed no eyes in the meshes or textures).
+  - `game/combat.py`: enemy `death` events carry `xp`; `rewards.each = [{uid, xp, gold}]`. `game/api.py`: `_sync_clone()` also warms the RVC model and runs on `new()`/`load()` (checked: with the Omniman clone, `voices.speak` returns converted audio).
+  - Tests: `tests/test_game.py` `test_each_fallen_enemy_reports_its_xp_and_gold` (new). Full suite: 593 tests, OK (3 skipped). Checked in the browser (`game-test-offline`, port 8771): bench, stand-up/sit-back, elf preview, black hole pulling everything in, summon spacing, world loads after.
+  - No new pip packages.
+- **Battle Pass round: study games, language trainers, gym coach, phone Study tab, backups (30 Oct 2026)**: owner picked features 1, 2, 8, 10, 11, 13–23, 27, 28, 31, 33, 34, 37–41, 43, 46 and 50 (as a battle pass) from a list of 50 suggestions.
+  - XP everywhere: `skills/quest.py` (new; levels, streak, 3 daily quests, badges, battle-pass rewards: room items / wallpapers / titles), `ui/quest.js` + `ui/rewards.js` (Battle Pass panel; locked room items show 🔒 in Add furniture, `ui/cozyroom.js`). `app.py` `_xp(kind, n, xp, why)` awards it (workout, meal, cards, study block, language…).
+  - Study: `skills/studygame.py` (new; Leitner flashcards 1/2/4/8/16 days from Flashcards + word bank, combos), `ui/studyplay.js` (new; Play tab: Flashcards, Ask my library with file/page/video-time sources, Formula sheet + print, 25-min study timer), `ui/study.js` (▶ Watch where this was said on video questions).
+  - Language: `ui/langplay.js` (new; per-word accent score, role-play scenes, shadowing, slow/normal speed, word bank, ✍ writing trainer, weekly report, XP & badges), `skills/sensei.py`, `brain/partner.py`.
+  - Characters: `skills/animate.py` (`cancel()` kills the process tree, `Cancelled`), `ui/rigger.js` (time left + Cancel), `brain/pinakamain.py` (`_lip_levels`: loudness every 50 ms → `lip` event), `ui/room.js` (`setLip`, mood idle `_fidgetClip`; needs clips like yawn/stretch/dance_sway on the model).
+  - Assistant: `skills/smartremind.py` (new; "when I get home" / "N min before <event>"), `skills/habits.py` (new), `skills/productivity.py` (morning brief adds a card + habits; focus blocking minimizes windows by title words), `brain/tools.py` (voice tools), `brain/voice_commands.py` ("open the battle pass"), `ui/planner.js` (Reminders for a situation), `ui/focus.js` (🚫 Block distractions), 🖥 screen helper in `ui/index.html`/`ui/app.js` (`screen_help`).
+  - Gym: `skills/gymcoach.py` (new; meal photo prompt/parser, meal log `data/meal_log.json`, sleep log, rest-day advice), `ui/gym.js` (Calories tab: rest box + meal log).
+  - Phone: `brain/phone.py` (`/api/upload` raw body up to 300 MB, `X-File-Name`), app.py `_phone_cards/_phone_card_answers/_phone_notices/_phone_upload`, `ui/phone/*` (🃏 Study tab: offline cards in localStorage, file upload, notifications polling every 60 s while open; `sw.js` cache `vermeil-phone-2`). `skills/mediaserve.py` (new) serves video lectures to the app.
+  - App: update dot (`ui/app.js` `checkForUpdate` every 6 h), `skills/backup.py` (new; zip of data/ with a `vermeil_backup.json` mark, never `spotify_token.json`/env, big folders optional; restore checks paths and makes a safety zip in `backups/`, now in `.gitignore`), Settings → General → Backup.
+  - Tests: `tests/test_battlepass.py` (new, 12) + `tests/test_universal.py`. Full suite: 592 tests, OK (3 skipped).
+  - Not tested on real devices: the vision call for meal photos, phone notifications and upload on a real phone, the phone UI in a browser. Known limit: the writing check passes very similar characters (あ/お, さ/き).
+  - No new pip packages.
+- **Update button, video lectures, USB drives, Talk live game, Animate fixes (30 Oct 2026)**: owner tested on another laptop (zip install) and hit `ModuleNotFoundError: No module named 'Quaternions'` in Animate, double-firing Animate buttons and a long Talk live text box; asked for an Update button with a loading bar, video lectures as reviewers and USB study files.
+  - `skills/animate.py`: `KEY_LIBS` also checks `Quaternions.py`/`Animation.py` (from the git-only `Motion` package); a `No module named` run writes `tools/unimate/libraries_missing.txt` so the next press reinstalls (`autosetup.py` calls `libraries_fixed()` after pip). `ui/rigger.js`: `once()` guard on Talking animations / Make the animations.
+  - `skills/updater.py` (new): GitHub commit check, git `pull --ff-only` for clones, else codeload zip of the branch (branch from git, or the `Vermeil-<branch>` folder name), never replaces `env`, existing `data/` files or `dnd/`; pip -r when requirements changed; `data/version.json` holds the sha. `app.py` `app_update_check/app_update/app_restart`; `ui/index.html` + `ui/app.js` General → Update with a `.clone-bar`.
+  - `skills/academic.py`: `MEDIA` types, `transcribe_media` (faster-whisper via `senses/stt.py`, a page per 5 min, `[m:ss]` lines), videos stay where they are (`source`), `removable_drives()` (removable + USB-bus disks), `scan_folder()`. `app.py` `study_add_paths` (media go to a background queue emitting `study_media`), `study_drives`, `study_scan`. `ui/study.js` USB banner/picker and media progress bar.
+  - Talk live: `skills/sensei.py` short replies, corrections first; `brain/partner.py` `split_reply` also finds a mid-text "Corrections:" and emits `talk`; `ui/study.js` game (points, combo ×5, best, ✓/✗ with a short fix, one line of hers). `ui/mock.js` mocks for all of it.
+  - Tests: `tests/test_update_usb_partner.py` (9). 580 tests OK (3 skipped).
+
+- **Simple app icon + installer shortcut & finished line (30 Oct 2026)**: owner asked for a simpler, minimalistic version of the glowing V icon on the installer's desktop shortcut, and a clear "finished" line.
+  - `scripts/make_icon.py` (new, PIL): cyan gradient V with one small star on a dark rounded square, no rings/text. Writes `ui/vermeil.ico` (16-256 px), `ui/vermeil.png`, `ui/vermeil_1024.png`, Android `mipmap-*/ic_launcher.png` and iOS `icon-1024.png` (full square).
+  - `scripts/install.ps1`: shortcut gets the icon + a description, is copied to the Start menu, and the window ends with a green `=== FINISHED! Vermeil is installed. ===` line. `uninstall.ps1` removes the Start-menu one too. `install.sh`: Linux launcher uses `ui/vermeil.png`, same finished line. `ui/index.html` uses `vermeil.ico` as the favicon.
+  - Left uncommitted (another tool's, now redundant): `scripts/build_icon.py`, `scripts/create_shortcut.ps1`, root `vermeil.ico`, `ui/vermeil.svg` (the old busy icon).
+  - Test: `test_installer_makes_a_shortcut_with_the_icon_and_says_finished`. 571 tests OK (3 skipped).
+
+- **Android app `android/` (30 Oct 2026)**: the Android counterpart of `phone-ios/` (owner asked for Android next).
+  - Kotlin, **no libraries** (plain `android.app.Activity`, `HttpURLConnection`, `org.json`), AGP 8.7.3, Kotlin 2.0.21, minSdk 26, target 35. Screens built in code (`MainActivity.kt`: Pair, Talk, Practice & more `WebView`, Settings).
+  - `ListenService.kt`: foreground service (type microphone, notification with Stop) running `SpeechRecognizer` in a loop (on-device on Android 13+), wake word → command, 8 s to say it after the wake word alone; pauses while she thinks/speaks and while the web tab is open.
+  - `Hub.kt`: shared state, pairing in app-private SharedPreferences, `/api/hello|chat|speak` (`VermeilApi.kt`, `X-Vermeil-Key`), her PC voice (WAV via `MediaPlayer`) or the phone's `TextToSpeech`.
+  - Assistant button: `ACTION_ASSIST` / `VOICE_COMMAND` intent filters → listens for a command at once. Pair links: `vermeil://pair`. The phone web page's native card now shows on Android too, linking to the APK.
+  - Build: `.github/workflows/android.yml` (ubuntu, Java 17, Gradle 8.10.2) runs `RulesTest.kt` and `assembleDebug`, uploads the APK and puts it on the **`android-app`** prerelease (`gh release upload --clobber`). Debug-signed, so a new build may need uninstalling the old one first (README says so).
+  - Also: `.gitattributes` keeps `*.bat` CRLF; the iPhone app's texts say "Vermeil phone app".
+  - Files: `android/**`, `.github/workflows/android.yml`, `.gitattributes`, `ui/phone/{index.html,phone.js}`, `phone-ios/{README.md,Vermeil/Views.swift}`, `tests/test_universal.py` (+3: 28), README, FEATURES (146), HANDOVER.
+  - Tests: test_universal 28 OK (one earlier run had a one-off failure in `PhoneServerTests.test_needs_the_key`, passed on reruns). No Android SDK on this PC: the build is checked by GitHub only; not tried on a real phone yet.
+
+- **Windows one-click install from GitHub with UniMate, extra-room camera, Stop button (30 Oct 2026)**
+  - **Install first:** `INSTALL Windows.bat` (repo root, CRLF) runs `scripts/install.ps1`, now 7 steps: step 6 runs the new `scripts/setup_unimate.py` (calls `autosetup._unimate` with console progress: Miniconda, portable Git, code, Python 3.10, checkpoint, libraries; marks `_started`/ready in `data/auto_setup.json`; Windows only, a failure only warns). `package_app.py` leaves `INSTALL Windows.bat` out of the zip (the zip has `INSTALL.bat`). README starts with "Install first, then open the app".
+  - **UniMate libraries install themselves:** the owner didn't want to paste pip commands (another PC got stuck on "Almost there"). `app.unimate_setup()` always calls `autosetup.retry("unimate")`; `animate.status()` only shows `pip_commands()` when the last automatic try failed (`auto["status"] == "failed"`). `ui/rigger.js` toast about the commands removed.
+  - **Extra-room camera:** `ui/room.js` `_aimAtRoom(i)` frames room i like the main room's view (target and offset scaled by the room's size against the main room); `_diorama(off)` re-aims at her room after editing instead of the main view. `?mock` exposes `window.__room` (preview checks only).
+  - **Stop button:** Study → Language: **■ Stop** (`.partner-stop`) sits after **🎙 Talk live** while a live conversation runs; Talk live is disabled then.
+  - **Files:** `INSTALL Windows.bat`, `scripts/{install.ps1,setup_unimate.py,package_app.py}`, `skills/animate.py`, `app.py`, `ui/{rigger.js,room.js,app.js,study.js,style.css}`, `tests/test_house_music.py` (+2), README, FEATURES (145), HANDOVER.
+  - **Tests:** 567 run, all OK (3 skipped). Camera and Stop button checked in the `?mock` preview. The installer's UniMate step was run here (already installed → skipped); not yet run on a fresh PC. No new packages (the installer pip-installs `huggingface_hub`, already in requirements.txt).
+
+- **iPhone app `phone-ios/` (30 Oct 2026)**: a real Swift app so the wake word works with the phone locked (owner chose iPhone first).
+  - `Listener.swift`: `AVAudioEngine` mic + "audio" background mode + on-device `SFSpeechRecognizer` (fresh recognition every 50 s), wake word → command after 1.3 s quiet (8 s to say it after the wake word alone), paused while she thinks/talks; handles calls/interruptions/route changes. `WakeWord.swift` = same rules and sound-alikes as `ui/phone/phone.js`.
+  - `AppModel.swift` / `VermeilAPI.swift`: `/api/hello`, `/api/chat`, `/api/speak` (her PC voice as WAV, fallback iPhone voice) with `X-Vermeil-Key`; key in the Keychain. `Views.swift`: Pair, Talk (orb + chat + typing), "Practice & more" (the phone web app in a WKWebView; the ears rest while it's open), Settings. `SiriIntents.swift`: "Hey Siri, ask Vermeil" and "Hey Siri, start Vermeil".
+  - Pairing: the phone web page's Settings has **📲 Open in the Vermeil iPhone app** (iPhone only) → `vermeil://pair?u=…&k=…`; or paste the normal link.
+  - Built with XcodeGen (`project.yml`, Info.plist made from it). `.github/workflows/ios.yml` builds it on GitHub's Mac (simulator, unsigned) and runs `Checks/main.swift`. Installing needs a Mac + Xcode (free Apple ID = re-install every 7 days). Not on the App Store (always listening isn't allowed there). Never run on a real iPhone yet.
+  - Files: `phone-ios/**`, `.github/workflows/ios.yml`, `ui/phone/{index.html,phone.js,phone.css}`, `tests/test_universal.py` (+3 tests: 25), README, FEATURES, HANDOVER.
+- **Universal: phone app (outside the house too), Mac/Linux installer, low-end mode, share characters, live language partner (30 Oct 2026)**
+  - **Phone app:** `brain/phone.py` is a small web server on `127.0.0.1:8790` (`PhoneServer`). Every `/api/<name>` call needs the `X-Vermeil-Key` header (key in `data/phone.json`, checked with `hmac.compare_digest`). 20 wrong keys in 60 s lock it for 60 s. Size caps: 64 KB JSON, 8 MB audio. Only files in `ui/phone/` are served (no `..`). `Tunnel` makes it reachable on mobile data: a **Cloudflare quick tunnel** (`cloudflared` downloads itself into `tools/cloudflared`, URL read from its output), or **Tailscale** (`tailscale serve`), or "local" (same Wi-Fi only). `app.py`: `phone_set/phone_status/phone_new_key`, `_phone_handlers` (hello, chat, shortcut, speak, speak_lang, switch, hear, partner_start/reply/stop). Settings → **📱 Phone** shows a QR code (`ui/vendor/qrcode.js`); the link has the key after `#key=` so it never reaches a server log.
+  - **Phone UI (`ui/phone/`):** installable web app (manifest + service worker, never caches `/api`). Big bottom tabs (Chat, Talk, Practice, Characters, Settings), 48 px buttons, safe-area padding, dark/light. Hands-free wake word ("Vermeil" + sound-alikes, the character's name, or your own) with the phone's speech recognition, fallback: record → `/api/hear` (Whisper on the PC). Replies are spoken with her PC voice (or the phone's voice). Screen stays on with Wake Lock.
+  - **Honest limits:** Siri can't be replaced by any app → Settings shows a **Siri Shortcut** ("Hey Siri, Vermeil" → asks → sends to `/api/shortcut` → speaks the answer). On Android, set the browser as assistant / use the home-screen app. A web app can't listen when the phone is locked or the app is closed (needs a native app - not built).
+  - **Low-end mode:** `brain/machine.py` scans RAM, CPU, GPU, battery → tier; "auto" switches by itself (also on battery). Low power turns off RVC, Chatterbox and Kokoro, Whisper `base`, and lighter room graphics (`room.setLowPower`). Settings → AI → "This computer". Voice: "low power mode", "full power", "auto mode", "scan my computer".
+  - **Share characters:** `brain/charshare.py` exports a `.vermeil` file (with or without the voice) and imports one (checked, new id, no paths outside the app). Characters → ✏ → Share, and "📥 Import a character".
+  - **Live language partner:** `brain/partner.py` holds a spoken conversation in the language (correction + reply split, STOP to end, score). Study → Language → "🎙 Talk live", the phone's Practice tab, or say "let's practice Japanese".
+  - **Mac / Linux:** `scripts/install.sh` + `INSTALL Mac.command` / `INSTALL Linux.sh` (one click: .venv, core packages, voice, env, launcher). `.gitattributes` keeps them LF; `package_app.py` puts them in the zip as executable. `paths.open_path` opens files on every OS (used in coder, pc, productivity, spotify); hotkeys skip on Mac; Windows-only pip packages are skipped elsewhere (`plugins.WINDOWS_ONLY`). Not tested on a real Mac/Linux.
+  - **Files:** `app.py`, `brain/{phone,machine,partner,charshare,paths,plugins,coder,pinakamain,voice_commands}.py`, `skills/{pc,productivity,spotify}.py`, `ui/{index.html,app.js,study.js,style.css,mock.js,room.js}`, `ui/phone/*`, `ui/vendor/qrcode.js`, `scripts/{install.sh,package_app.py}`, `INSTALL Mac.command`, `INSTALL Linux.sh`, `.gitattributes`, `tests/test_universal.py`, README, FEATURES, requirements.txt.
+  - **Tests:** 558 run, all OK (3 skipped). New `tests/test_universal.py` (22). Phone UI checked at phone size against a stand-in server; desktop Settings checked with `?mock`.
+
+- **Fresh-copy fixes, room camera, voice commands + Settings → Help (29 Oct 2026, newest)** (from testing the GitHub branch on another laptop)
+  - **RVC on a fresh copy:** `tools/rvc` exists in git (only `.gitkeep`), so the old check said "installed" while the models were missing → "[RVC] RVC isn't set up yet". `plugins.PLUGINS["voice_clone"]` now lists real `files` (`tools/rvc/vec-768-layer-12.onnx`, `tools/rvc/rmvpe.pt`, downloaded from Hugging Face `RVC_HF` if the pack is missing) and `folders: ["data/rvc_voices"]` (made by `_install_now`). `PACKS["rvc_models"]` in `scripts/package_app.py` now also packs `data/rvc_voices` (the character voices, ~823 MB).
+  - **UniMate without Git for Windows (the laptop's real problem: "Git for Windows is needed for UniMate"):** `animate.PORTABLE_GIT` = `%LOCALAPPDATA%\Vermeil\PortableGit`; `animate._bash()` / `_git()` look there last. `autosetup._portable_git(dest)` downloads `PORTABLE_GIT_URL` (PortableGit 2.51.0 64-bit, official git-for-windows release), checks `PORTABLE_GIT_SHA256` (matches the release's own digest), unpacks it with `-o<dest> -y`. `_work` retries an old "Git for Windows is needed" failure at once instead of waiting a day. The self-unpack couldn't be run on this PC (has Git) - first real run is on the laptop. Tests: `UniMateGitTests`.
+  - **UniMate button:** `ui/rigger.js` button always says "Make the animations" (owner asked; never disabled) → when not ready, `app.unimate_setup()` (ready / pip commands when only libraries are missing / `autosetup.retry("unimate", emit)`, which skips the 24 h wait after a failed try). `autosetup._work(emit, only=None)` can run one part. Errors toast "UniMate didn't finish: … (The whole story is in <log>)" (`unimate_animate` returns `log`). Not reproducible here (UniMate is ready on this PC) - if it still fails on the laptop, ask for the toast text / log.
+  - **Room camera:** `ui/room.js` `_fitDiorama(dir)` fits the edit-mode view to `house.bounds()` (k = max(1, width/10, depth/8.5); distance 23k; keeps the current direction). `_houseChanged` calls it when a room is added/removed/resized; outside edit mode `_aimAtRoom(i)` re-aims at the room she's in. Checked in the mock preview (add room → zooms out, width 8 m → still fits).
+  - **Voice commands:** new `brain/voice_commands.py` (`FEATURES` = every sidebar item + Games/Voice/Camera/Your PC with example sentences, `parse()` for instant "open/show/go to X", help, mic off, camera on/off; "start …" is left to the AI). `app._voice_command` runs from `_quick_command` (opens the panel, or Settings → Plugins when that feature isn't installed). `app.voice_commands()` feeds **Settings → Help** (new tab, `renderVoiceHelp()` in `ui/app.js`, search box `#voiceHelpFind`, "Not installed" badge). Tests: `tests/test_voice_commands.py`.
+  - No new packages.
+
+0000000000000000000000. **Every feature installs from one Google Drive folder link (29 Oct 2026, newest)**
+   - **Remove completely / reinstall from Drive (29 Oct 2026, latest):** `plugins.own_packages(p)` = the feature's pip packages + everything they pull in (`importlib.metadata` Requires-Dist, extras ignored) minus `keep_pip()` (CORE_PIP + `ALSO_KEEP` scipy/huggingface_hub/onnxruntime, which the app's own code uses + every requirements.txt line that isn't a feature's) minus what other installed features need. `uninstall()` pip-uninstalls that whole set, deletes the local zip when it's on Drive, and `freed` counts the packages (sizes from each package's RECORD, cached in `_pkg_mb`; installed packages cached in `_dist_cache`, cleared by `_pip`). `status()` `used_mb` includes packages (~2.6 s, mostly folder sizes). `_install_now`: zip from Drive -> wheels -> `pip install --no-index --find-links` (+ `SHARED` zips like `pytorch.zip` via `_fetch_shared`), then the downloaded zip is deleted. Packager: `feature_wheels(p, tmp)` pins `name==version` from this PC (`--no-deps`; torch with the `--extra-index-url` from requirements-ai.txt), not-installed packages download with their deps; `make_drive` writes `00 pytorch (shared)/pytorch.zip`. Tests: `RemoveCompletelyTests`, `test_wheel_names`. **Uploaded 29 Oct 2026:** the `--with-wheels` build (6.0 GB, every feature zip + `pytorch.zip`) was copied to `G:\My Drive\Vermeil` with robocopy; gym.zip checked with `pip install --dry-run --no-index` (openpyxl 3.1.5 + et_xmlfile 2.0.0, nothing installed). The 6 `test_gym` errors only mean Gym is uninstalled on this PC (no openpyxl) - press Install on Gym.
+   - **Built in:** `plugins.DRIVE_FOLDER` = the owner's Vermeil folder (`https://drive.google.com/drive/folders/1J3qV6WX3p_DCdKtG_b0H8rUB6LYcaZtk`). `folder_link()` (pasted `_folder` first, else DRIVE_FOLDER), `folder_files()` (cached 10 min, [] when offline), `_cached_zip`, `_link_for(p)` (saved link, else finds `<zip_name>.zip` in the folder and saves it), `warm_folder()` (background read when Settings -> Plugins opens, then a `_folder` plugin event redraws). `install()` / `_install_now` / `_fetch_pack` use `_link_for`. Games hub: an empty link box = every game in that folder (`mygames.add_url("")`).
+   - `brain/gdrive.py`: `folder_id`, `parse_folder_page`, `list_folder(url, depth=3)` - reads a shared folder through Drive's plain list page (`embeddedfolderview?id=`), walks sub-folders, returns `{name, id, path, url}`. A private folder (sign-in page) raises a clear error.
+   - `brain/plugins.py`: `zip_name(p)` (= `pack` or the feature id; every feature can have a zip now), `use_folder(url)` (finds `<zip_name>.zip` for every feature, saves the links + `_folder` in `data/plugin_links.json`), `set_link` works for every feature, `_fetch_pack`, `_files_missing`. `_install_now`: 1) zip (local `plugin_packs/` or downloaded from Drive) -> unpacked, 2) pip from the zip's `plugin_packs/wheels/<id>/` with `--no-index` (falls back to the internet, then deletes the wheels), 3) anything still missing from the internet. `status()` gives `folder` and `zip`.
+   - `app.py`: `plugins_use_folder(url)` (kept for code use only). UI: a card says "downloads <zip>.zip from the Vermeil Drive folder".
+   - **Voice speed (29 Oct 2026, newest):** `senses/gpu.py`: `cuda()` (once: imports torch, `ort.preload_dlls()`; False with
+     `VOICE_DEVICE=cpu`, CPU-only onnxruntime or no CUDA), `providers()`, `session(path, so)` (CUDA, falls back to CPU),
+     `on_gpu()`. Used by `tts._voice` (`PiperVoice.load(use_cuda=gpu.cuda())`), `rvc._contentvec` (when `_device()` is cuda;
+     `_use_cpu()` clears `_cache["vec"]`), `kokoro._session`. `rvc._convert` runs `net.infer` under `torch.autocast` fp16 on cuda.
+     Before, onnxruntime-gpu silently used the CPU (no CUDA DLLs found). Measured (RTX 3050, Bubbles): long sentence 3.2 s -> 1.1 s
+     (ContentVec 1.28 s -> 0.14 s, Piper 0.58 -> 0.28 s, RVC net ~25% faster); SpeechStream first audio 1.9 s -> 0.9-1.1 s, no gaps.
+     onnxruntime-gpu 1.31 is built for CUDA 13 (nvidia-*-cu13 pip packages) while torch is cu124; both load fine together. Tests: `test_gpu.py`.
+     **DirectML (newest):** `gpu.kind()` = "cuda" / "directml" (onnxruntime-directml installed: `DmlExecutionProvider`) / None.
+     `providers()` gives `gpu.DML` (`performance_preference: high_performance`); `session()` sets `enable_mem_pattern=False` +
+     `ORT_SEQUENTIAL` for DML and wraps the session in `_OneAtATime`: ALL DirectML sessions share one lock `_dml_lock`, because two
+     DML sessions running at once on different threads crash Python (access violation, seen with Piper + ContentVec side by side).
+     `tts._voice` builds `PiperVoice(session=gpu.session(path), config=PiperConfig.from_dict(json))` for DML (Piper's own loader
+     only knows CUDA). Checked with onnxruntime-directml 1.24.4 unpacked into scratch (not installed): Piper 0.25 s, RVC 0.9 s,
+     3 sentences at once OK, Kokoro on DML. Test: `test_directml_for_any_card`.
+   - **Setup bar on every start - fixed (29 Oct 2026, newest):** `builtins_missing()` wrongly listed Chatterbox and RVC every
+     time: `has_module()` guessed the import names `chatterbox_tts` / `faiss_cpu`. Now `IMPORT_NAME` has `faiss-cpu: faiss`,
+     `chatterbox-tts: chatterbox`, and `has_module()` falls back to `importlib.metadata.version(pip_name)`. `_files_missing()`
+     for the offline AI uses `_ollama()` (= `llm.ollama_exe()`: tools/ollama or a normal Ollama install), not only
+     tools/ollama/ollama.exe. On this PC `builtins_missing()` is now `[]`. Tests: `test_installed_packages_with_other_import_names_count`,
+     `test_a_normal_ollama_install_counts`.
+   - **Built-ins + progress bars (29 Oct 2026):** `"builtin": True` on voice_commands, kokoro, emotional_voice (Chatterbox),
+     voice_clone (RVC), unimate, online_voices, camera, local_ai, calendar, browser. `FEATURES` = the non-builtins (= the sidebar
+     features); `status()` lists only those; `is_installed` is True for built-ins; install/uninstall/install_many refuse them;
+     `keep_pip()` keeps their packages. `builtins_missing()` + `setup_builtins(step)` (skips local_ai under `OLLAMA_MIN_FREE` 20 GB;
+     one failure doesn't stop the rest; raises listing what failed) run from `skills/autosetup.py` part `builtins` before `unimate`.
+     Progress: `_log(pid, text, pct, step)` stores `pct`/`step`/`error` in `_jobs` (sent in `status()` and the plugin event) and calls
+     `_progress_hook` (setup_builtins maps it to overall %). `ui/plugins.js` shows `.load-bar.plugin-progress` + `.plugin-error`
+     instead of log lines; `ui/app.js` shows the setup as a floating `#setupBar`. `ui/style.css`: every bar (`.load-bar`, `.clone-bar`,
+     `.progress`, gym/mission/music bars) uses the accent gradient (Spotify's green bar kept). "Load links.txt" button removed
+     (`plugins.import_links` / `app.plugins_import_links` still exist, unused by the UI). Tests: `BuiltInPartTests`.
+     Rebuilt `Vermeil-App.zip` copied to the Drive folder. Not checked: a real first start downloading Chatterbox on a clean PC.
+     **Planner + Generator plugins (29 Oct 2026):** `planner` (code `ui/planner.js`; the planner API in app.py and
+     reminders stay in the app) and `generator` (code `skills/generator.py ui/generator.js`, pip `python-pptx moviepy`;
+     `IMPORT_NAME` has moviepy). app.js loads planner.js / generator.js with `optional()`; `app.gen_start` / `gen_recent`
+     answer "isn't installed" when skills/generator.py is gone. Checked in `?mock` with both files removed (only 404s).
+     planner.zip (8 KB) and generator.zip (~36 MB with wheels) are in the Drive folder.
+   - **Code-only features are Drive zips too (29 Oct 2026, newest):** these entries have a `"code"` list of their own files:
+     spotify `ui/spotify.js` (skills/spotify.py stays in the app, Music's Playlist Lab imports it), kitchen `skills/baking.py ui/baking.js`,
+     electronics `skills/electronics.py ui/electronics.js ui/electronics/{lab.html,lab.js,lab.css,parts.js,sim.js,view2d.js,view3d.js}`
+     (gizmo3d.js stays, the Builder uses it), missions `brain/missions.py ui/missions.js`, focus `skills/focus.py ui/focus.js`,
+     mind `ui/mind.js` (brain/mind.py stays, the chat uses it), code `brain/coder.py ui/code.js`. plugins.py: `_code`, `_needs_zip`
+     (folders or code) is used where `folders` was; uninstall deletes the code (`_backup_code` to `_archive/plugin_code/<id>/` first,
+     only when `BASE/_archive` exists = the project folder), and `_install_now` runs `_restore_code` (the backup wins if it differs, then it's removed).
+     `_amount()` prints KB for small amounts. `brain/optional.py`: `load(name)` gives the module or a do-nothing `Missing` stand-in;
+     app.py uses it for `missions` and `coder.CodingAgent`. `ui/app.js` loads the 7 UIs with `optional()` dynamic imports
+     (a missing file -> a `notInstalled` proxy panel). `tools.run_tool`: ModuleNotFoundError -> "<feature> isn't installed - install it in Settings → Plugins".
+     Packager: `code_files()` keeps them out of the app zip, `feature_files` puts them in the feature zip, `--only app,kitchen` remakes just those.
+     Checked: all 7 uninstalled + reinstalled from the real Drive folder in a temp copy (files identical to the project); the UI loaded
+     with baking.js/missions.js/code.js removed (only warnings); app.py imported with those modules hidden. Tests: `CodeFeatureTests`.
+   - **The link is hidden (29 Oct 2026, owner's friends use the app):** the "Use folder link" box was removed from Settings -> Plugins; `status()` sends no `folder` and no per-feature `link`, only `on_drive` (yes/no); the per-feature link box only shows for a feature whose zip isn't in the folder, and starts empty; `gdrive.hide_links()` strips Google links from every plugin log line (`plugins._log`) and the Games hub errors. Note: it's hidden from the screens, not secret - it's still in `brain/plugins.py` and the folder is "Anyone with the link". The rebuilt `Vermeil-App.zip` (495 MB) with this change is in the Drive folder (downloaded back and checked byte-identical). `package_app.py` now never packs the project's `plugin_packs/` folder into the app zip (those are zips this PC downloaded; each has its own Drive copy).
+   - `skills/mygames.py`: `add_url` with a folder link -> `add_folder` adds every game .zip under "Games" (skips ones already in the hub). `ui/games/games.js` shows all added names.
+   - `scripts/package_app.py --drive`: `feature_files(p, a, tmp)` makes a zip for every feature that has something (folders, model files, `tools/ollama` without models, and with `--with-wheels` its packages via `pip download`). HOW TO INSTALL.txt now says to paste the folder link.
+   - Tests: `tests/test_drive_folder.py` (folder parsing, private folder, folder -> links, install from a zip with offline wheels and no writing outside the app, games from a folder, feature zips).
+
+000000000000000000000. **Side-view fights, Blender monsters, design decisions, Drive packaging, 3 s first sound (29 Oct 2026)**
+   - **Unity game (`C:\Users\jpant\My project`), side view on the z = 0 plane:**
+     - `Forest/Forest.cs`: floor slab + 3 one-way ledges (`ledges`, `SurfaceBelow`, `Clamp`/`ClampAir`), trees/props in front of the camera are removed (they are children of `w.root`), side hazards (acorn `Column`s, lanes at your height...), `Flat`/`Closest`/`Reach` measure to a foe's body (feet to head) in XY, drops (`Drop`/`Take`/`Pickups`/`CollectAll`: coins, honey, and potion/bomb/ether from elites and bosses), camera `side = true`.
+     - `Forest/Fighter.cs` rewritten: gravity 32 (x1.35 falling, x2.2 when Space is let go), jump 14.5, air jump 12, coyote 0.1 s, S+Space drops through ledges, Shift dash 0.18 s / 4.5 m / 0.28 s i-frames (counts for Perfect Dodge), Q bubble 2 s (cooldown 8 s x 0.8^firefly cards; blocks Normal + Hazard, not Unavoidable), R ultimate, E pickup, W/S aim up/down, down-hit pogo. AutoPlay has 11 outputs.
+     - `Forest/Foe.cs`: walkers fall, hop up to ledges and drop off them; fliers hover 2.5-4 above you (`bob`). Moves redone for the side view (bite/sweep cones, charge line, aimed spit, rain columns, lane band, leap circle, purple nova).
+     - `Forest/Telegraph.cs`, `Forest/Bolt.cs`, `Core/Vfx.cs` (`Ring(..., upright)`), `Actors/Player.cs` (`CameraRig.side`, FOV 30, pitch 5, dist 30), `Core/Keys.cs` (Dash, Bubble, Ultimate, Pickup, UpHeld, DownHeld).
+     - **Monsters:** `Tools/blender_monsters.py` builds 25 new low-poly "Beasts" (per biome + fliers + the Thornwyrm), roster in `Core/Data.cs`, import rules in `Editor/ImportRules.cs` / `Core/Art.cs`. The `dnd` assets are only used for the card frames.
+     - Autotest (`Vermeil.exe -autotest`) runs with 0 exceptions; screenshots in `Build\shots` (e.g. `12_fight_glade_5`, `16_fight_heartwood_1`).
+   - **Design doc:** `Downloads\roguelite_action_platformer_game_design.txt` got section **19a. DECISIONS MADE IN THE PLAYABLE PROTOTYPE** (engine/art pipeline, controls, class stats, EXP 14 + 10 x level, rarity odds, Mythics/Legendaries, shards, biome rosters, shops, solo only).
+   - **App (this folder):**
+     - Chatterbox: memory fix, token cap (`_max_tokens`), slow guard (`_slow_until`), early cuts at commas -> first sound of a short paragraph in **2.47 s** on the GPU.
+     - RVC import loading bar; per-room floor slab; Games hub launches the Unity game; plugin Google Drive links.
+     - `scripts/package_app.py --drive` -> `dist/Vermeil-Drive/` (a folder per feature/plugin + games, each with install/uninstall). `scripts/install.ps1` / `scripts/uninstall.ps1`. Portable-files check fixed (DoNotShip list).
+
+00000000000000000000. **Forest runs, real-time combat and level-up cards in Unity (28 Oct 2026)**
+   - **Cards (Blender):** `blender/cards/` has `make_cards.py` (builds every card as a little 3D diorama in a frame and renders it), `Cards.blend`, `cards.json` (the 30 cards: 3 Mythic per hero = 18, plus 12 Legendary) and `renders/`. Copies are in the Unity project at `Assets\Vermeil\Resources\Art\Cards\<id>.png` and `Resources\Cards\cards.json`. The card frames reuse the look of the card assets in `dnd\` (not modified).
+   - **Heroes:** the six animal heroes (`Heroes/Animals/<Name>`) replace the old humans. `HeroDef` (Core/Data.cs) gained `resource`, `counter`, `counterInfo`, `skillCost` (0 = spends it all), `ranged`, `attackGap`.
+   - **New scripts (`Assets\Vermeil\Scripts\`):**
+     - `Cards.cs`: loads `cards.json`, `Offer()` (3 cards; your hero's Mythics are rarer and come once, Legendaries stack), `Pick()` (the pick screen; time stops while it is up), `Has`/`Count`.
+     - `Forest/Forest.cs`: the run (6 stages x 5 rounds, round 5 = mini-boss, then the Thornwyrm), the arena (WorldGen clearing), spawning, forest hazards, hit tests (`Impact`: Perfect Dodge = dodge pressed within `PerfectWindow` before the hit), damage, XP / level ups, rewards, the boss bar.
+     - `Forest/Telegraph.cs`: the ground warnings (circle, cone, line/lane). Drawing and hit test use the same math. Red = normal, purple = can't be countered, amber = hazard.
+     - `Forest/Foe.cs`: enemy AI (chase or keep distance, moves bite/slam/sweep/charge/spit/rain/lane/leap/nova), stagger (bosses max 0.5 s), boss phases.
+     - `Forest/Fighter.cs`: the hero (move, dodge with 1-2 charges, attack, skill, satchel, the six counters, every card effect, autotest autopilot). `Forest/Bolt.cs`: hero shots.
+   - `Game.RunFlow` now calls `Forest.Run`. `RunState.cards` holds the cards taken. New keys in `Core/Keys.cs`: `Attack`, `Dodge`, `Skill`, `Satchel`.
+   - `Explore.cs` and `Battle.cs` were moved (not deleted) to `C:\Users\jpant\My project\OldCode\`.
+
+000000000000000000. **The adventure rebuilt in Unity 6 as a 3D roguelite (28 Oct 2026, newest)**
+   - **Where:** `C:\Users\jpant\My project` (Unity 6000.6.7f1, URP 17, new Input System only, uGUI). Build: `Build\Vermeil.exe`. The art in `Assets\Vermeil\Resources\Art\` is *copied* from `dnd\` (never edit `dnd\`). Everything is built in code from one empty scene (`Assets\Vermeil\Boot.unity`); `Game` boots itself (`RuntimeInitializeOnLoadMethod`).
+   - **Scripts (`Assets\Vermeil\Scripts\`):**
+     - `Game.cs`: the big loop (campfire → black hole → village → run → village...), `RunState`/`Member`, banking shards/gold, lighting, `MakeHero`/`Dress`/`MakeVermeil`, autotest screenshots.
+     - `Cutscenes.cs`: `Campfire` (hero select on the logs), `BlackHole` (props wobble, `Breaker.Shatter` cuts real mesh chunks with physics, `Sucked` pulls them in), `Eject` (everything flies out of the portal with gravity, hero lands on their back, Vermeil's `help_up`), `Ending`, the `Portal` class.
+     - `Village.cs`: ring of buildings facing the well, NPC stations (smith = skill tree, trader, tailor = cosmetics, bell tower = Eclipse), hero swap by the inn.
+     - `Explore.cs`: one run area (coins, gems on platforms, chests on mountain tops, the caged ally → jar, wandering enemies `Wander`, exit portal; the lair's portal opens after the boss).
+     - `Battle.cs`: turn-based timed-press combat (rings, Perfect bonus, blocks, skills per hero, items, Vermeil's turn, boss stomp), evenly spaced rows (`Line`), allies pop out of jars, +EXP/+Gold popups and sounds per enemy.
+     - `World/WorldGen.cs`: path (Catmull-Rom), clearings, flat-topped mountains, flat-shaded vertex-color ground, placement that never overlaps or sits on the path (`Free`/`Take`), groves, stepping-stone platforms.
+     - `Core/`: `Art` (spawn + fit + footprint), `Rig` (Playables, clip aliases), `Sfx`, `Vfx`, `Keys`, `UI`, `Data` (heroes, allies, enemies, biomes, skill tree, shops, save in `Application.persistentDataPath`), `VoiceBridge`.
+     - `Editor/Builder.cs` (`VermeilBuilder.Build`: materials, boot scene, `StreamingAssets/vermeil.json` with the app + Python paths, then the exe), `Editor/ImportRules.cs` (Generic rigs, looping clips, Vermeil's cut-out eyes/hair).
+   - **Blender (`Tools/`):** `blender_make_assets.py` makes `Art/Vermeil/Vermeil.fbx` (from `ui/models/anime_girl.glb`, only the mech outfit + original hair, textures saved to `Art/Vermeil/Textures`, new `help_up` clip), `Made/Jar.fbx`, `Made/BlackHole.fbx`; `blender_heroes.py` adds Sit/Lie/GetUp to the heroes; `make_sfx.py` makes the sounds.
+   - **Voice:** `game_tools/unity_voice_server.py` (port 8790, `/ping`, `/say?speaker=&text=`). Only speaker `vermeil` (the companion = the app's active character) uses the RVC clone; NPCs use Piper. New `tests/test_unity_voice.py` (8 checks).
+   - **Web game:** `ui/game/characters.js` `PAINT_FACE` matches nothing now (no painted eyes on the warrior/ranger).
+   - **Fixes after the first self-tests:**
+     - Size: `Art.Measure` now uses Unity's own renderer boxes (`updateWhenOffscreen` on skinned meshes); baking the skin by hand came out 100x off for Vermeil and the Quaternius monsters. `Art.Spawn` falls back to the bind-pose box when a rigged fit looks wrong, and `Actor.Start` re-checks the animated size two frames later and rescales. Do NOT drop the clips' scale keys at import: the heroes need them (tried, it broke them).
+     - Textures: `Art.FindTexture` finds a material's map by name (spaces, case and ".001" ignored), then `<Model>_Texture`, then the pack atlas (only for `Monsters`/`Cute`). `Art/Monsters/Textures/Atlas_Monsters.png` was copied from `dnd\Ultimate Monsters...` (the monsters were white). Vermeil's glb materials glowed pure white: her emission is now a soft glow of her own texture.
+     - Ground: `Shaders/VertexLit.shader` uses its own sky/ground ambient (`_VSky`/`_VLow`, set in `Game.Light`) and caps the light, so the slopes are no longer blown-out white.
+     - Particles: `Art.Dot` is premultiplied, so fire and sparkles are round, not squares.
+     - `Actor.WalkTo` stops when the actor is removed (that was the NullReference in the village).
+   - **Tests:** 481 tests, all OK (3 skipped).
+   - **Self-test:** `Build\Vermeil.exe -autotest` plays campfire → black hole → eject → village → first area → first battle, saves `Build\shots\*.png`, logs to the player log, then quits.
+
+00000000000000000000. **Animal heroes remade from the concept art (28 Oct 2026, newest)**
+   - **Why:** the user said the earlier heroes looked like "a stickman with skin". They asked for:
+     - heroes true to the concept art: animals on two legs, not humans;
+     - a fighting stance;
+     - face animation when attacking or dodging.
+     The user also said to disregard the earlier versions.
+   - **Where:** `blender/heroes/` (13 MB), built by the new script `make_heroes.py`. It replaces `blender/pixel_heroes/` and `blender/megabonk_heroes/`. Both old folders (and `make_pixel_heroes.py`) were deleted on 28 Oct 2026 at the user's request.
+   - **Body:** a chibi skeleton.
+     - Hips at 0.5 m, shoulders at 0.86 m, the head from 0.99 to about 1.45 m: a big head and short thick legs.
+     - Big paws and feet with toes (claws on the paladin, gecko and hawk).
+     - Each hero is modelled from the concept art. Examples: the frog's headband tails and rope wraps, the platypus's bent wizard hat, staff and water orb, the armadillo's banded shell, ears and kite shield, the fox's hood, quiver, bushy tail and bow, the gecko's slit eyes, spots, hood and daggers, the hawk's crest, beak and wings.
+   - **Look:** the same as the Megabonk versions (low-poly, facet-jittered vertex colors, `lit()` sun materials, chunky pixels).
+   - **Rig:** the same IK controls as before, plus face bones `jaw`, `eye.L/R` and `brow.L/R` (bone collection "Face"). 31 to 36 bones and 1750 to 2420 faces per hero. IK reach error 0.02 mm.
+   - **Animations:** four actions, 8 frames each.
+     - **Idle:** the per-hero fighting stance from `STANCES`, with breathing and a blink.
+     - **Walk.**
+     - **Attack:** from `attacks()`.
+     - **Dodge:** a hop back, from `dodge()`.
+     - **Face keys:** `key_face()` takes `eye` (scale), `brow` (degrees), `lift` and `jaw` (degrees). The presets are ANGRY, SHOUT, GRIN, WIDE and BLINK.
+   - **Previews:** `previews/` has `<Hero>.png`, `_idle`, `_walk`, `_attack` (side view), `_dodge`, `_face` (head close-ups of the expressions) and `AllHeroes_lineup.png`.
+   - **Command options:** `-- frog` builds one hero; `-- lineup` remakes only `AllHeroes.blend` and the lineup.
+   - **Checked:** all six build; I looked at the lineup, the frog's and hawk's attacks, and the frog and gecko face strips.
+   - **Not done:** not imported into Unity. The mouth opening is small at this render size (the eyes and brows read best).
+
+0000000000000000000. **Megabonk-style heroes (28 Oct 2026, replaced by the entry above; folder deleted)**
+   - **Where:** `blender/megabonk_heroes/` (6 MB): the six heroes again, in the look of the user's Megabonk screenshots. The 2D pixel versions in `blender/pixel_heroes/` are kept.
+   - **How:** the same script with `-- megabonk` (`make_pixel_heroes.py`, flag `MB`). Same shapes, rig, IK and Idle/Walk actions. Differences:
+     - Low-poly: spheres 8x6, tubes at most 7 sides, flat shading. Each facet's vertex color is randomly 0.86-1.06x bright (hand-painted look).
+     - `thicken()` makes the body and limbs 1.25x fatter around their bone line (clothes too); heads 1.15x.
+     - `lit()` materials: Principled BSDF, base color from the `Col` vertex colors (stored linear), roughness 0.85. No outline modifier.
+     - `stage_mb()`: perspective 50 mm camera from the front-right and above, warm sun (energy 4, hard shadows), blue sky light 1.1, a faceted grass disc (collection `Stage`). Renders 170x170 (lineup 320x150), 1 sample, filter 0, enlarged 4x.
+     - Refinements (MB only): torso thickens 1.1x and limbs 1.3x (`THICK`), so the arms stay visible; gloves 1.45x, bigger boots with cuffs, knee pads, glove cuffs (in `body()`); `brighten()` lifts dark colors.
+   - **Attack animations (all heroes, both styles in the script):** an `Attack` action (8 frames) per hero from `ATTACKS` / `posed()` (eased poses of the IK controls). `key_controls` now also keys turns (`rotation_quaternion`, world axes around the control). The hands' Copy Rotation is now WORLD/REPLACE, so the hand takes the control's own turn (weapons aim where `hand_ik` points; the feet are unchanged). The attack previews are rendered from the side (`_attack.png`); the camera saved in the files stays in front. The 2D pixel files were NOT rebuilt with this yet.
+   - **Files:** a `.blend` and an `.fbx` per hero (Idle, Walk, Attack clips), `AllHeroes.blend`, and `previews/` (`<Hero>.png`, `_idle`, `_walk`, `_attack`, `_ik`, `AllHeroes_lineup.png`). No sprite sheets (it's a 3D look). 8 MB.
+   - **Checked:** all six build, IK within 0.06 mm, the lineup and every attack strip look right. One build hung once before rendering (likely shader compiling while the user's Blender window was busy); rerunning worked. **Not done:** not imported into Unity; no jump animation; small face details (frog mouth) are rough at this size.
+
+000000000000000000. **Pixel-art animal heroes in Blender (28 Oct 2026; replaced and deleted, see the newest entry)**
+   - **Where:** `blender/pixel_heroes/`. It has the six heroes from the user's concept art (FrogBrawler, PlatypusMage, ArmadilloPaladin, FoxRanger, GeckoRogue, HawkSwordsman).
+   - **The look:** like the user's references (Astral Ascent / Torch of Shadows style): 2D side-view pixel art, NOT voxels. The first voxel version was rejected as "minecraft looking".
+     - Slim smooth 3D bodies (tapered tubes and ellipsoids) with 1.3x heads.
+     - Toon materials: Diffuse > Shader to RGB > constant ColorRamp with 3 shades (cool shadow, color, highlight) > Emission. The sun has no shadows.
+     - Outline: the `Outline` Solidify modifier (flipped normals, material_offset 999 = the last `Outline` material, backface culling).
+     - `PixelCamera`: orthographic, side view turned 32° to the front. The hero faces right on screen. Renders at 128 px (2.6 m), 1 TAA sample, filter 0, 'Standard' view transform.
+     - The sprites are then upscaled 3x/4x with nearest-neighbour (numpy inside Blender).
+   - **Files:**
+     - A `.blend` and an `.fbx` per hero. The FBX has deform bones, the Idle and Walk clips baked from the IK, and vertex colors, but no outline or toon shading.
+     - `AllHeroes.blend` has all six in a row.
+     - `sprites/<Hero>_idle.png` and `_walk.png`: 8 frames each, transparent, 3x.
+     - `previews/<Hero>.png`, `<Hero>_ik.png` and `AllHeroes_lineup.png`.
+   - **How it's built:** one script, `make_pixel_heroes.py` (Blender CLI, about 2 min; `-- frog` builds just one hero). Each shape is rigid on its bone (one vertex group per bone).
+   - **The rig:**
+     - Bones: root > hips > spine > chest > neck > head, thigh/shin/foot and upper_arm/forearm/hand, and tail bones for the platypus, fox and gecko.
+     - IK: 2-bone IK on the shins and forearms, with `foot_ik`/`hand_ik` targets and `knee_pole`/`elbow_pole` poles (pole angles auto-picked so the rest pose doesn't move). `tail_ik` drives the tail.
+     - The feet and hands copy their control's rotation.
+     - The controls have wire shapes (hidden `WGT` collection) and sit in the bone collections "Deform" and "IK Controls".
+     - The actions `Idle` and `Walk` (in place, 8 frames, 10 fps) key only the IK controls and the hips.
+   - **Checked:**
+     - The IK reaches its targets within 0.06 mm on every rig.
+     - The lineup, the IK test pose and the walk sheets look right.
+   - **Known / not done yet:**
+     - On some walk frames, the swords of the hawk and paladin cross the face.
+     - Small faces (the frog's mouth, the gecko's eyes) lose detail at 128 px.
+     - No attack or jump animations yet.
+     - The heroes are not in the Unity game yet.
+
+00000000000000000. **Voice speed, UniMate without Blender, rooms on both sides, downward dropdowns, one Cooking & Baking panel (28 Oct 2026, newest)**
+   - **Voice:**
+     - `brain/pinakamain.py`: `WHOLE_REPLY = True` again (whole reply in one go). New `warm_voice()` makes one silent line in a background thread ("voice-warm") with the active voice + RVC + an emotion, so the first real reply is fast. Called from `app.py` `_apply_character`; it only runs again when the voice/clone changes.
+     - `senses/rvc.py`: runs on the GPU (`_device()`, `RVC_DEVICE=cpu` forces CPU). `convert()` falls back to the CPU for good on a GPU error. 7 s of audio: ~10 s → ~1.5 s.
+     - `senses/kokoro.py`: `_session()` builds the onnxruntime session (all optimisations, CUDA if the GPU build is installed, else CPU; `KOKORO_DEVICE=cpu`). The main app still has the CPU build of onnxruntime; the user swaps it themselves (command in README / kokoro.py docstring).
+     - `senses/voice_emotion.py`: `detect()` reads a reply sentence by sentence and keeps the strongest feeling; a sad sentence beats a plain "happy" one; new `_SAD_WORDS` ("oh no", "I'm so sorry", "I wish I could"…).
+   - **UniMate without Blender (`skills/animate.py`):** step 3 runs with `tools/unimate_bin/blender`, a bash stand-in written by `_blender_shim()` that runs the script with the unimate env's Python + bpy 4.0. Full real run on `ui/models/pikachu.glb` (idle + walk, ~9 min) made `ui/models/_unimate/pikachu/{idle,walk}.glb`. `ui/rigger.js` calls `onSaved(name, true)` when done and `ui/app.js` saves the character with the new `-animated.glb`, so the clips are used straight away (walk while moving, idle otherwise).
+   - **Rooms:** `renderHousePane` (`ui/app.js`) has both **+ Room on the left/right** buttons at the top; room cards sit side by side (CSS `.house-pane`). The right-room button used to be hidden below the drawer.
+   - **Dropdowns:** new `ui/dropdown.js` (`initDropdowns()`): every single `<select>` opens our own list *below* the box (the panel scrolls first if there's no room). Styles `.dd-list/.dd-item/.dd-group`.
+   - **Cooking & Baking:** one menu item `data-panel="kitchen"` → `#panel-kitchen` with tabs `#kitchenTabs` holding `cookingBody` and `bakingBody` (`kitchenTab()` in `ui/app.js`, remembered as `ui.kitchen_tab`). `OPTIONAL_PANELS` and the `kitchen` plugin (`brain/plugins.py`, now "Cooking & Baking") use `"kitchen"`. `app.py` turns old hidden `baking`/`cooking` into `kitchen` on start. Recipe data and the `baking_*` API are unchanged.
+   - **Tests:** 473 tests, all OK (3 skipped). New `tests/test_kitchen_unimate.py` (7 checks); `tests/test_rvc.py` real-model test now feeds the model on its own device.
+
+0000000000000000. **Undo round: Qwen3-TTS removed, RVC import back, no floors/stairs, window as furniture, camera per room, UniMate installed (27 Oct 2026, newest)**
+   - **Qwen3-TTS removed completely, back to Kokoro + RVC:**
+     - Deleted `senses/qwenvoice.py`, `scripts/setup_qwen_tts.*`, `data/qwen_voices/`, the `qwen-tts` package and the 6.7 GB of Qwen models in the Hugging Face cache.
+     - `app.py`: no `qwen_*` API, no `voice_engine`; applying a character warms its RVC model again. `brain/pinakamain.py`: no Qwen branch, replies are voiced **sentence by sentence** again (`WHOLE_REPLY = False`). `skills/autosetup.py` only sets up UniMate.
+     - Settings → character: the old **Voice clone (RVC)** box is back (`#rvcBox` in `ui/index.html`): dropdown, **Import a voice (.pth + .index)…**, Remove, **Speak with** (`rvcBase`), pitch and index sliders.
+     - `data/characters.json`: `qwen_voice` / `voice_engine` removed; the RVC settings (Bubbles, Rick Sanchez, Mickey Mouse) are kept.
+   - **Floors and stairs removed:** `ui/house.js` is rooms only (`shell.house = {rooms:[{side,w,d}]}`; old `floors`/`stairs` keys are ignored). Gone: `FH`, `STAIR_STYLES`, `climbPath`, `room.goToFloor/viewFloor/level`, `cozy.setViewLevel`, `spec.level`, the floor buttons (`#floorBar`), the up/downstairs idle trips in `ui/life.js`. Edit room → **🏠 Rooms** only has the rooms box.
+   - **The big window is a furniture item (`CATALOG.bigWindow` in `ui/cozyroom.js`):** select it in Edit room to move or delete it, and add it again from Wall decor. It uses the shared sky picture (`cozy.skyMat`, marked `userData.keepLook` so paint and delete leave it alone) and has its own glow (`ctx.glow`, set by `applyHour` via `_lightWindow`). Hidden in the gym room (`withShell`). Old layouts get it once at its old place (back wall, u 2, y 1.75) unless `shell.window` was false or a den window is on the back wall; new saves have `shell.windowItem: true`, so a deleted window stays deleted. The Window box and `setShowWindow` are gone.
+   - **Camera follows her between rooms (`ui/room.js` `_roomAt`, `_followRoom`):** when she walks into a left or right room, the camera glides to a view of that room from its open front (like the main room's); back in the main room it returns to your main-room view. Only the main-room view is saved (`onViewChange`). Starting a workout while she's in a side room puts her back in the main room.
+   - **UniMate libraries installed** into `~/miniconda3/envs/unimate` (setuptools<81, then `tools/unimate/requirements.txt` with `--no-build-isolation`; torch 2.5.1 CUDA 12.4). `animate.libraries_installed()` is now True.
+   - **Tests:** 466 tests, all OK (3 skipped). `tests/test_house_music.py` has 4 new checks (no floors/stairs, window is furniture, camera follow, RVC box back).
+
+000000000000000. **House round: rooms, floors & stairs instead of yards, Kokoro back as default, meal planner options, music & mirror fixes (27 Oct 2026)** (floors, stairs, the Window box and Qwen were removed again in the round above)
+   - **Yards removed, house added (`ui/house.js` new, `ui/yard.js` deleted, pets moved to `ui/pets.js`):** Edit room → **🏠 Rooms & floors**:
+     - **Floors:** 1-4. Every floor above has the same rooms as the ground floor. A removed floor's furniture moves down.
+     - **Rooms:** add rooms to the left/right of the main room (up to 4). Width 3-8 m, depth 3-8.5 m. Each joins through a doorway.
+     - **Stairs (main room only):** style (`STAIR_STYLES`), position, turn, width, step depth, colour, railing.
+     - **Window:** ✕ Remove window / + Put the window back. Its glow goes with it; saved as `shell.window`; Undo works.
+     - Saved in the room layout as `shell.house = {rooms:[{side,w,d}], floors, stairs:{...}}`.
+     - Floor buttons above the room (`#floorBar`): she **climbs the stairs** to that floor (`room.goToFloor`). In edit mode they only change the floor you look at (`room.viewFloor`). Floors above the one you look at are hidden.
+     - Her floor is `room.level`, furniture has `spec.level`, and `FH = 3.4` m per floor. By herself she sometimes goes up/downstairs (`ui/life.js`).
+     - Old yard things in a saved layout are skipped (they're not in the catalog any more).
+   - **Voices:**
+     - Qwen3-TTS 1.7B and 0.6B both ran at under 0.1x real time on the RTX 3050, too slow for talking. So **Kokoro + RVC ("classic") is the default again** (`app.py` `voice_engine`); Qwen stays as an option marked "natural but slow".
+     - Cloning a Qwen voice from an RVC model uses the RVC voice picked in *Speak with emotion*; the clone isn't the character's voice.
+     - UniMate and Qwen3-TTS aren't installable features in Plugins any more. Cloned voices are always listed.
+     - UniMate's libraries are installed by you with pip: the Animate box shows the two commands (`animate.pip_commands()`).
+   - **Gym → Meal planner:** choose **2-6 meals a day**; each meal has an **Other dish** button that cycles through dishes (`gym.meal_plan(goal, profile, meals, dishes)`).
+   - **Music UI out of sync - fixed (`skills/f1.py`):** ffplay is its own program, so a song kept playing after Vermeil closed. The next Vermeil then showed 0:00 and ▶.
+     - The player's process id is now saved in `data/music_player.pid`.
+     - On start, `f1.stop_leftover_player()` stops that leftover ffplay (only if the process really is ffplay).
+     - On close, `atexit` stops the music.
+   - **Study no longer changes the room lights:** opening the Study panel kept switching to the "study" lighting scene. Now only the tutor talk style does (`ui/life.js` `sceneFor`).
+   - **Games pause your music:** opening Games pauses Vermeil Music and Spotify (`ui/app.js`, `#adventureBtn`).
+   - **Bathroom mirrors are real mirrors on the wall (`ui/dnd_furniture.js`):** the glass part of the model (material "Mirror") is swapped for the reflective `Mirror` from `ui/mirror.js`. Both mirrors are wall pieces now; ones placed on the floor in older saves move onto the back wall (`cozyroom.addItem`). Paint skips the glass.
+   - **Tests:** 462 tests, all OK (3 skipped). New `tests/test_house_music.py`: meals per day, other dish, UniMate pip commands, the leftover-player check.
+
+00000000000000. **Clean-up + yard round: music cut-off fix, walk outside, wallpapers, meal planner, auto-setup (27 Oct 2026)**
+   - **Music stopped ~15 s early - fixed (`skills/f1.py`):** the volume-levelling filter (`dynaudnorm`) holds back the last ~15 s of audio by default, and `ffplay -autoexit` quit before playing them. Now `NORM_FILTER = "dynaudnorm=f=200:g=5"` (tiny look-ahead), so songs play to the very end.
+   - **Settings:** the RVC section is hidden, the "(not installed)" sidebar toggles are gone, **Room** is removed from the sidebar. "Speak with" moved into the Qwen box.
+   - **Yard (`ui/yard.js`, `ui/room.js`, `ui/life.js`):** white picket fence round the plot with a front gate, stepping-stone path to a sidewalk and road, ~2600 grass tufts and flowers, default trees / bushes / flowers that you can delete in edit mode (seeded once, `yardSeeded`). She **walks out of the door** (`goOutside("back"|"front")`, `goInside()`), the **camera follows her outside**, and she **uses yard things** (`useYardItem`: walks up, faces it, plays with it). New buttons above the room: 🌳 Back yard / 🏡 Front yard / 🚪 Go inside (`#outsideBar`). By herself she goes out sometimes between 8:00 and 20:00 and comes back in at night.
+   - **Wallpapers (`ui/cozyroom.js` `WALLPAPERS`):** 12 patterns (stripes, damask, floral, brick, stars…) at the top of Edit → **Wall decor**; they take the wall colour. Saved in the room layout (`shell.wallpaper`).
+   - **Gym:** *Meal planner* (Bulk / Cut / Recomp: calories, protein, fat, carbs for the day and 4 meals with grams, `gym.meal_plan`, made from the Calories tab). *Progress* charts now show only **weight and reps** per lift (two charts side by side), with **My stats** (weight, arms, thighs, chest, waist) at the bottom.
+   - **Qwen3-TTS:** the loading bar shows an ETA; a clone is saved straight into the **Speak with** dropdown; **no more silent replies**: if Qwen is still loading or takes longer than `QWEN_TIME_LIMIT` (20 s + a bit per letter) for a sentence, the normal voice says it instead (`brain/pinakamain.py` `_qwen_voice`).
+   - **Auto-setup (`skills/autosetup.py`, new):** when the app opens it gets Qwen3-TTS (pip install of `requirements-ai.txt` + the ~4.5 GB model) and UniMate (Miniconda silent install to `~/miniconda3`, git clone, the `unimate` env from conda-forge, its libraries, the ~2 GB checkpoint) ready in the background, with toasts showing progress. Ready parts are skipped; a failed part waits 24 h before retrying. Log: `data/auto_setup.log`, state: `data/auto_setup.json`. **Not run on my PC yet** (UniMate will download Miniconda the next time the app starts).
+   - **AI detector (`skills/academic.py`):** better scoring (sentence-length variety, AI words, "one remains", triplets, semicolons…), and *Make it sound human* uses a stronger rewrite prompt and checks again.
+   - **Tests:** 456 tests, all OK. Updated 5 old tests (whole-reply speaking is the default now, fillers like "Hehe" are stripped, the new humanize prompt) and added `test_meal_plan_for_each_goal`.
+   - Not done: a quick check whether the smaller Qwen3-TTS 0.6B model is faster on the RTX 3050 (4 GB) - the timing run gave no output, so 1.7B is still used.
+
+0000000000000. **Big feature round: rigging + UniMate, Qwen3-TTS voices, gym calories, AI detector, lyric videos, devices, size clean-up (27 Oct 2026)**
+   - **3D rigging (`ui/rigger.js`, new):** after importing a .glb/.gltf (or with the 🦴 *Rig & animate* button under the model picker) a full-screen rigger opens.
+     - Model already has a rig → asks "see it, or is it okay as it is?". Seeing it shows the bones; then "delete it and rig it yourself?".
+     - New rig: *Auto* (guesses biped / quadruped / creature from the shape), the three presets, or *Place bones myself* (click point to point, joints chain; click a dot to branch; Exit or Esc to stop). Joints can be dragged, renamed, deleted, mirrored L↔R.
+     - Skin weights are made automatically; IK chains (arms, legs) are saved in the GLB (`userData.ik`), and *Test pose* lets you drag hands/feet.
+     - Save → `ui/models/<name>-rigged.glb` (`app.save_rigged_model`). Then "Animate it?" → UniMate.
+     - Fingers and ears are animated by hand in `room.js` (`_moveFingers`: relaxed curl, small twitch while talking, grip when holding a book).
+   - **UniMate animations (`skills/animate.py`, `scripts/setup_unimate.bat`, new):** idle, walk, wave, talk, happy, dance, cheer, jump, sad, sit. Needs a one-time setup: **Miniconda + Git for Windows**, then run `scripts\setup_unimate.bat` (clones into `tools\unimate`, makes the `unimate` conda env, downloads the checkpoint). The app runs it through `conda run` + Git Bash and merges all clips into `<name>-animated.glb`. **Not tested on my PC yet.** The UniMate checkpoints are CC BY-NC (non-commercial).
+   - **Qwen3-TTS 1.7B Base voice (`senses/qwenvoice.py`, `scripts/setup_qwen_tts.*`, new):** voice cloning from an RVC model (it says a line, the best 3 s are kept, with a loading bar), an audio file, or a 3-second recording. Always uses reference text (auto-transcribed by Whisper, hidden), never x-vector. Emotion control via mood versions of the clip. Many languages. A reply is voiced in one go. Setup: `python -m pip install -r requirements-ai.txt`, then `scripts\setup_qwen_tts.bat` (~4.5 GB model into `tools\qwen3tts`).
+   - **Personality box:** *Write a personality like…* (`make_personality`) keeps the character's personality and adds how to write so Qwen3-TTS reads it naturally.
+   - **No filler sounds:** "hm, ahh~, hmph, mmm~, uhm" are banned in the prompt (`brain/Vprompt.py`) and stripped from replies (`brain/pinakamain.py`, `_FILLER*`).
+   - **Room:** yards (front/back) and pets that wander and can be petted (`ui/yard.js`), undo (40 steps), DnD furniture paint now applies a colour theme like the built-in furniture (`cozyroom.recolorItem`), talk guide under the chat box.
+   - **Gym:** *Calories* tab: BMI, BMR, maintenance, deficit / small deficit / lean bulk / bulk with kg per week/month and weight in 3 months (Mifflin-St Jeor, saved in `data/gym_profile.json`). *Progress* tab: monthly line charts per lift (est. 1RM, heaviest set, volume, sets) + body weight.
+   - **Study:** the drop zone glows and bounces when you drag files over it; each file flies in as a chip with a spinner → ✓/✗, and new files glow in the list.
+   - **Research → AI Detector + Humanizer:** 0-100% "AI-like" score from text statistics (sentence-length variety, stock AI phrases, repeated openers, personal voice, contractions) blended 60/40 with your AI's opinion; flagged sentences are highlighted. *Make it sound human* = paraphraser (human voice) → grammar fixer → re-check, shows before/after %. (`academic.detect_ai`, `academic.humanize`.)
+   - **Music:** songs stopping early fixed: the player sends YouTube's browser headers, saves a full copy of the song in the background (`data/music_cache`, last 40 songs) and, if the stream drops, resumes from that copy (max 6 retries). Song search now prefers **lyric videos**; a playlist's *🎤 Use lyric videos* button converts an existing playlist (`mm("to_lyrics", id)`).
+   - **Plugins ↔ menu ticks:** Settings → Sidebar shows uninstalled features as "(not installed)"; ticking one offers to install it; installing a feature brings its menu button back (it glows once).
+   - **Devices:** Settings → Voice & camera has Camera and Microphone pickers listing only devices that work (🔄 *Find devices* re-checks). Cameras open with DirectShow first, which stops the "MSMF can't grab frame" errors.
+   - **Errors fixed:** pywebview `OPEN_DIALOG` deprecation (`_OPEN_DIALOG` uses `FileDialog.OPEN`), "No module named torch" on RVC import (now a clear message + torch is in `requirements-ai.txt`).
+   - **Animations everywhere:** a shared motion layer in `style.css` (tabs, lists, cards, answers, folding sections, button press/hover) + sparks on success messages; all of it is turned off by Windows' "reduce motion".
+   - **Install on another PC:** `requirements.txt` (everything) + `requirements-ai.txt` (torch CUDA 12.4, qwen-tts, RVC extras). A code-only copy with no `data/` and no `env` starts fine and passes the tests.
+
+000000000000. **Major 8-Fix Update: Study Drag & Drop, Grammarly-style Corrector, Open Voice, Math Formulas, Music Queue & Cutoff Fix, 3D Gizmo & DnD Asset Interaction (24 Oct 2026, newest)**
+   - **1. Drag-and-Drop Lecture Imports in Study:**
+     - Added `study_import_file_data(filename, base64_data, kind, subject)` in `app.py` and `ui/mock.js` to decode base64 file payloads from webview/browser drag-and-drop and safely save/process them via `academic.add_file()`.
+     - In `ui/study.js`, built a dedicated drag-and-drop zone in Library that reads dropped files asynchronously via `FileReader.readAsDataURL` and automatically imports them into the user's lecture library.
+   - **2. Grammarly-style Grammar Corrector in Research:**
+     - Added `academic.correct_grammar(text, tone)` in `skills/academic.py`, backend `study_grammar_check()` in `app.py`, and mock in `ui/mock.js`.
+     - Added interactive "Grammar Corrector (like Grammarly)" card in Study -> Research with tone selector (Academic, Formal, Concise, Casual), quality score badge (0-100), issue category breakdown chips with before/after comparisons, and 1-click "Copy Corrected" and "Use in Box".
+   - **3. Real-Life Open Voice Conversation & Live Guide:**
+     - Upgraded language conversation practice in `ui/study.js` (`openTalk()`) with an "Open Voice Mode (Hands-free)" toggle.
+     - Vermeil automatically speaks her responses aloud using native speech synthesis (`api.sensei_say()`), and the system automatically opens real-time microphone listening for your voice reply upon turn completion.
+     - Added an interactive "Conversation Guide (Real-Life Prompts & Hints)" cheat sheet providing dynamic situational phrases (with English meanings and 🔊 pronunciation audio buttons) that can be clicked to practice or speak directly.
+   - **4. Complete Math Formula KaTeX Rendering in Assignments:**
+     - Updated tutor prompt in `skills/academic.py` (`assignment_help`) to strictly require LaTeX delimiters (`$..$` inline, `$$..$$` display) and valid braces.
+     - In `ui/util.js`, rewritten `setMd()` to protect math blocks from HTML escaping/markdown processing, auto-detect bare LaTeX formulas without delimiters, and sanitize legacy shorthand (`\mathbfr'`, `\mathbf T`) into valid KaTeX syntax. KaTeX formulas render directly via `window.katex.renderToString()`.
+   - **5. Music Player Next Buttons & Modern Queue UI:**
+     - Fixed "⏭ Next song" button in `ui/mymusic.js` by standardizing commands to `f1.music_control` (`skip` / `next`).
+     - Added `remove_from_queue(idx)` and `play_queued_index(idx)` in `skills/mymusic.py` and `app.py`.
+     - Completely redesigned `drawQueue()` into a modern card-based music queue with a "Now Playing" cover banner with playback controls, queue management action bar (Skip, Shuffle, Clear Queue, Refresh), numbered track cards, and individual "Play Now" and "Remove" buttons.
+   - **6. Fix Music Playback Stalling, Silence & Premature Cutoff:**
+     - In `skills/f1.py` (`_play_worker`), fixed variable scoping bug: declared `global user_stopped` in both `_play_worker()` and `_stop_current_song()`, preventing skips from triggering recovery loops on the same song.
+     - Removed `-reconnect_at_eof 1` from ffplay arguments to eliminate the trailing silence and stall when tracks end.
+     - Switched default yt-dlp format to `bestaudio[ext=m4a]/bestaudio/best` for fast, bufferless playback without throttling.
+   - **7. 3D Builder Gizmo Improvements (Image 1):**
+     - Scaled down gizmo arrows and planar handles by ~50% in `ui/electronics/gizmo3d.js` (`shaftLen: 0.52`, scale `dist * 0.075`) for a sleek, Blender-like appearance.
+     - Fixed arrow drag movement: `_applyWorldPosition` now directly updates `target.position` in its parent local space, properly translating the object as the arrow is dragged.
+     - Added an interactive `🗑 Delete` button to the gizmo HUD overlay when parts are selected, connected to `removeSelected()`, and added `Delete` / `Backspace` key handling in `ui/builder/builder.js`.
+   - **8. DnD Room Furniture Interaction & Color Customization (Image 2):**
+     - In `ui/dnd_furniture.js`, when GLB models finish loading asynchronously, properly assigned `o.userData.itemId` across all internal meshes, cloned materials independently, and triggered room update callbacks.
+     - In `ui/room.js`, updated pointer picking to recursively search parent hierarchies for `itemId` if clicking submeshes, enabling immediate selection, dragging, and moving of all DnD furniture across the room.
+     - In `ui/cozyroom.js` (`recolorItem`), fixed GLB recoloring so that dark materials and low-saturation fabrics on Quaternius models are no longer rejected as neutrals, allowing full color customization across sofas, beds, and furniture.
+   - **Files touched:**
+     - `skills/academic.py`, `skills/f1.py`, `skills/mymusic.py`, `app.py`
+     - `ui/electronics/gizmo3d.js`, `ui/builder/builder.js`
+     - `ui/dnd_furniture.js`, `ui/cozyroom.js`, `ui/room.js`
+     - `ui/study.js`, `ui/mymusic.js`, `ui/util.js`, `ui/mock.js`
+     - `tests/test_study.py`, `HANDOVER.md`
+
+00000000000. **Major 19-Feature Vermeil Assistant & UI Upgrade (24 Oct 2026, newest)**
+   - **1. Retro Games Cover Faded Backdrop:** When loading into a retro game, the game's box cover art is now displayed as a faded, ambient blurred background layer behind the emulator canvas with smooth transitions (`ui/games/games.js`, `ui/games/player.html`, `ui/games/games.css`).
+   - **2. Planner Notification Sounds:** Added an audible notification sound sequence (`notify`) generated via Web Audio API in `ui/psp.js` and `ui/fx.js`. Connected to periodic due task checks in `skills/f1.py` and `ui/planner.js` to alert the user when schedule items are due.
+   - **3. File Drag-and-Drop Across the App:** Built universal drag-and-drop support (`ui/util.js`: `setupDropZone`) with visual `.drop-active` highlights. Enabled in:
+     - Study Library (`ui/study.js`): drag & drop documents, PDFs, or lecture files to import them directly.
+     - Code Workspace (`ui/code.js`): drop files to open or import.
+     - Circuit Lab (`ui/electronics/lab.js`, `ui/electronics/view2d.js`): drag parts from the palette and drop them directly onto the breadboard.
+   - **4. Paraphraser in Study -> Research:** Added academic paraphrasing capability (`skills/academic.py`: `paraphrase()`, `app.py`: `study_paraphrase()`, `ui/mock.js`). Added an interactive Paraphraser card in Study -> Research (`ui/study.js`) with styles (Standard, Fluent, Formal, Simple, Creative) and length controls (Same, Shorter, Longer) with one-click copy and replacement.
+   - **5. Study & Language Speaker Labeling:** In study chat discussions (`ui/study.js`: `openTalk()`), dialogue clearly distinguishes speakers with formatted `<span class="msg-speaker">You:</span>` vs `<span class="msg-speaker">Vermeil:</span>` badges.
+   - **6. Mathematical Formula Rendering (KaTeX):** Connected KaTeX (`ui/vendor/katex/katex.min.css`, `katex.min.js`, `ui/index.html`) into markdown parsing (`ui/util.js`: `setMd()` / `renderMath()`). Assignments and study materials now render proper mathematical typesetting for inline `$..$`, display `$$..$$`, and bare LaTeX expressions (e.g., `\mathbf T(t)=\frac{\mathbf r'}`) instead of unformatted raw code.
+   - **7. Step-by-Step Video Recipes & Synchronized Cooking/Baking:**
+     - Split clumped text and video transcripts into numbered steps (`skills/baking.py`: `_split_clumped_text()`, `_flatten_steps()`).
+     - Added cross-synchronization between `baking.json` and `cooking.json` so additions, edits, and deletions in either recipe book keep both synchronized. Verified with unit tests in `tests/test_baking.py`.
+   - **8. Generator Toggle in Settings:** Added `"generator"` to `OPTIONAL_PANELS` in `ui/app.js`, providing an on/off toggle for the Generator panel in Settings.
+   - **9. Removed Spotify Toggle in Settings:** Removed `"spotify"` panel toggle from `OPTIONAL_PANELS` in `ui/app.js`.
+   - **10. Fixed Code Folder Picker Freeze:** In `app.py` (`code_choose_folder`), wrapped pywebview's Windows folder dialog invocation in a detached background worker thread to prevent WebView2 message-loop deadlocks.
+   - **11. Editable Playlist Details in Music:** Added playlist metadata editing in `ui/mymusic.js` (`editDetails()`) and `skills/mymusic.py` (`update_playlist()`), enabling users to change playlist title, description, and cover image (via file picker or URL).
+   - **12. Fixed Early Music Cut-Off:** In `skills/f1.py` (`_play_worker`), added reconnect options to ffmpeg/mpv and an early-cutoff recovery loop that refreshes streaming URLs from yt-dlp and seamlessly resumes playback from the exact elapsed timestamp when streams drop unexpectedly.
+   - **13. Queue Tab in Music:** Added a dedicated "Queue" tab in `ui/mymusic.js` (`TABS`, `drawQueue()`) displaying all queued songs with track lengths, skip buttons, and a "Clear Queue" button (`app.py`: `mm("clear_queue")`, `skills/mymusic.py`: `clear_queue()`).
+   - **14. Removed Spotify Player Tab in Music:** Cleaned up the Music tabs in `ui/mymusic.js` by removing the dedicated Spotify player tab while retaining Spotify playlist importing in the Import tab.
+   - **15. Removed "Save to Ideas" Prompt in Mind:** In `ui/mind.js`, removed the unnecessary post-growth confirmation prompt after clicking "Grow it", streamlining idea generation.
+   - **16. Loading Animations on Long Operations:** Created a universal `.loading-card` component with spinning indicator in `ui/util.js` and `ui/style.css`. Integrated into Study research & assignments (`ui/study.js`), Mind thinking/growth (`ui/mind.js`), and Code AI queries (`ui/code.js`).
+   - **17. Blender-Style 3D Axis Gizmo in Electronics:** Created `ui/electronics/gizmo3d.js` providing an interactive RGB axis gizmo (Red X, Green Y, Blue Z arrows, planar quad handles, infinite guide lines, corner orientation cube, and G/X/Y/Z hotkeys) and integrated it into the 3D Build Lab (`ui/builder/builder.js`).
+   - **18. Interactive Circuit Lab & New Components:**
+     - Enabled drag-and-drop of electronic parts from the palette to the breadboard (`ui/electronics/lab.js`, `view2d.js`).
+     - Added new interactive components in `ui/electronics/parts.js` and `ui/electronics/view3d.js`: 7-Segment LED display (`seg7`), Slide Switch SPDT (`slide_switch`), and 5V Relay module (`relay`).
+   - **19. Full Room Furniture Catalog from `dnd` Assets with Universal Recoloring:**
+     - Created `ui/dnd_furniture.js` importing over 50 3D furniture models from the Quaternius asset library (`ui/game/assets/conv_furniture_pack/`, `conv_furniture_pack_2017/`, and `conv_ultimate_house_interior_pack/`) spanning beds, sofas, chairs, dining/coffee tables, bookshelves, kitchen appliances, bathroom fixtures, plants, and lamps.
+     - Integrated into `ui/cozyroom.js` (`CATALOG`), refactored `recolorItem()` to universally recolor materials on both procedural and GLB meshes, and updated `CATEGORIES` in `ui/app.js` with dedicated "kitchen" and "bathroom" tabs.
+   - **Files touched:**
+     - `HANDOVER.md`, `app.py`, `skills/academic.py`, `skills/baking.py`, `skills/f1.py`, `skills/mymusic.py`
+     - `tests/test_baking.py`, `data/baking.json`, `data/cooking.json`, `data/my_music.json`, `data/app_settings.json`
+     - `ui/app.js`, `ui/cozyroom.js`, `ui/dnd_furniture.js` (new), `ui/code.js`, `ui/style.css`, `ui/util.js`, `ui/index.html`
+     - `ui/mymusic.js`, `ui/mind.js`, `ui/study.js`, `ui/mock.js`, `ui/planner.js`, `ui/psp.js`, `ui/fx.js`
+     - `ui/games/games.js`, `ui/games/player.html`, `ui/games/games.css`
+     - `ui/builder/builder.js`, `ui/electronics/gizmo3d.js` (new), `ui/electronics/lab.js`, `ui/electronics/parts.js`, `ui/electronics/view2d.js`, `ui/electronics/view3d.js`
+   - **Tests:** 446 passed, 3 skipped, 0 failures, 0 errors across 449 unit tests (`python -m unittest discover -s tests`).
+
+0000000000. **Emotional voice: Chatterbox Turbo (24 Oct 2026, newest)**
+   - **What it is:** a new tick box in Characters, "Emotional voice (Chatterbox)". When it's on, English lines are spoken by Chatterbox Turbo (Resemble AI, MIT licence, runs on the PC) instead of Piper. Chatterbox acts the line out itself: it really laughs, chuckles, sighs and gasps.
+   - **How it works:**
+     - The AI's `*giggles*`, `*laughs*`, `*chuckles*`, `*sighs*` and `*gasps*` become Chatterbox tags (`[laugh]`, `[chuckle]`, `[sigh]`, `[gasp]`). When the box is on, the AI is told to use them.
+     - Chatterbox copies the timbre of the character's normal voice. The first time, the normal voice reads ~8 s of text, saved in `data/chatterbox_refs/`.
+     - With an RVC clone, Chatterbox speaks first and RVC turns it into the clone.
+     - Breaths and pauses (`expressive.finish`) are still added. The pitch melody isn't, because Chatterbox makes its own.
+   - **English only:** non-English lines (or a non-English character) keep the normal voice. If Chatterbox fails, the normal voice is used and the [tags] aren't read out.
+   - **Files:**
+     - `senses/chatter.py` (new)
+     - `brain/pinakamain.py`: `VOICE_CHATTER`, `_use_chatter`, `_chatter_base`, `warm_chatter`, and the start of `synth_voice`
+     - `app.py`: `chatter_status`, the `emotional` character setting, `preview_voice(emotional)`
+     - `ui/index.html`, `ui/app.js`, `ui/mock.js`
+     - `tests/test_chatter.py`
+   - **Setup:**
+     - `python -m pip install chatterbox-tts` (done).
+     - The model (~3 GB, Turbo files only) is in the Hugging Face cache. `chatter.py` loads it with `from_local` so the bigger files aren't downloaded.
+   - **Watch out:** installing chatterbox-tts changed torch from 2.14 to 2.6.0. That broke torchvision 0.29, which crashes `transformers` when it imports models. `chatter._no_torchvision()` hides torchvision from transformers, so nothing else needs it. RVC still works on torch 2.6.
+   - **Emotion tags:** the model also knows "how it's said" tags: `[happy] [angry] [fear] [surprised] [sarcastic] [crying] [whispering] [dramatic]`. Each sentence's detected feeling (`voice_emotion.detect`) adds one when it's clear: `chatter.with_mood`. Sad and soft need a very clear feeling.
+   - **Fixes for your package versions** (all inside `chatter.py`, nothing installed):
+     - torchvision is hidden from transformers.
+     - With numpy 2, librosa returns float64 audio, which Chatterbox can't take, so `_Librosa32` makes it float32.
+     - The watermark (`perth`) needs `pkg_resources`. Without it, a no-watermark stand-in is used. To get the watermark back: `python -m pip install "setuptools<81"`.
+   - **Speed on the processor (i5-11400H)** is too slow for real time:
+
+     | | Time |
+     |---|---|
+     | Model load | ~40–80 s |
+     | Copying a new voice | ~15 s, once |
+     | Work per 1 s of speech, Chatterbox alone | ~3.1–3.5 s |
+     | Work per 1 s of speech, with Rick RVC | ~4 s |
+
+     A 3–5 s line takes ~12 s before she starts. int8 quantization didn't help (3.25 s).
+   - **The PC has an NVIDIA RTX 3050 laptop GPU (4 GB), but torch is the CPU version.** `chatter.py` uses the graphics card automatically when it can (falling back to the processor). Graphics-card torch for the version Chatterbox needs, which also fixes torchvision:
+     `python -m pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124`
+     Not measured yet on the GPU. The model is ~3 GB, so it's tight in 4 GB.
+   - **Not done:** RVC (`senses/rvc.py`) is processor-only and could also use the graphics card later.
+   - Tests: 447 OK, 3 skipped.
+
+000000000. **"Copy a character" personality box (24 Oct 2026)**
+   - In Characters → edit a character, there's a new text box under **Personality** with a **✓** button on its right.
+   - Type any character (e.g. "Rick Sanchez" or "Jake the Dog") and press ✓ or Enter. The AI writes a Personality text describing how that character talks: attitude, slang, verbal tics, catchphrases and how they treat you. The text goes into the Personality box. Press **Save** to keep it.
+   - If the Name box is filled (e.g. "Pip"), it writes "You are Pip, talking exactly like Rick Sanchez…". If the Name box is empty, it fills in the character's name.
+   - It uses the normal AI: Groq when online, the local model offline. Every text ends with "Keep replies under 40 words and speak only in dialogue, never actions."
+   - Files:
+     - `app.py`: `make_personality(who, name)`
+     - `ui/index.html`: `.persona-gen` row
+     - `ui/app.js`: `makePersonality()`
+     - `ui/style.css`
+     - `ui/mock.js`: the preview fake
+     - `tests/test_personality.py`
+   - Tests: 442 OK, 3 skipped.
+
+00000000. **Faster, real-time speech + console list removed (24 Oct 2026)**
+   - **She starts talking sooner:** a reply is now voiced in small pieces. The first few pieces are cut at commas (at least 12 letters and 3 words), so she starts after about 2 seconds instead of waiting for a whole sentence. Later pieces are cut at full sentences, or at commas when they get long (40+ letters). Very tiny pieces are avoided because each piece has a small extra cost. (`brain/pinakamain.py`: `SpeechStream._cut`.)
+   - **Clone voices (RVC) can convert several pieces at the same time.** Only loading a voice waits its turn now (`senses/rvc.py`: `convert()`).
+   - **Pieces are made in order, two at a time.** The first piece gets the computer to itself, then each piece waits for the one two places before it. That way the next piece she needs is always ready first (`SpeechStream._submit`).
+   - A piece that ends at a comma keeps the voice up at the end instead of dropping it like the end of a sentence (`senses/expressive.py`).
+   - Measured on a long reply with Rick's voice (the PC was busy with OneDrive, so times vary):
+
+     | | Before | Now |
+     |---|---|---|
+     | First sound | ~2.2 s | ~2.1 s |
+     | Silence in the middle | ~9 s, in one long pause | ~4–8 s, split into short pauses |
+     | Finished after | ~40 s | ~34–38 s |
+
+     Voicing every piece at once made the first sound much slower (5–8 s), so that wasn't used.
+   - **The console tiles on the Retro home page were removed** (`ui/games/games.js`, `games.css`, `index.html`).
+   - Tests: 439 (3 skipped). New test: cutting long sentences at commas (`tests/test_batch8.py`).
+
+0000000. **Retro Games update (23 Oct 2026)**
+   - **No "Exit Emulation" button** in the game's menu (it only left a frozen "EmulatorJS has exited" screen). Leave with "← Back to games". (`ui/games/player.html`: `EJS_Buttons = { exitEmulation: false }`.)
+   - **Emulator engines are on this PC:** EmulatorJS 4.2.3 (free, open source) is in `ui/games/emulatorjs/data/` (about 155 MB, with all its cores; the duplicate "-thread" cores and the `src` folder were removed). The player loads it from there and only uses the internet copy (cdn.emulatorjs.org) as a backup. To reinstall it, download `4.2.3.7z` from github.com/EmulatorJS/EmulatorJS/releases and extract its `data` folder there.
+   - **English games only:** every list and search only shows (USA), (Europe), (World), (En,…) and English-translated games, plus names with no country. Japanese, Korean, French and other versions are hidden (`retrogames.is_english`).
+   - **Console tiles** on the Retro home page (24 consoles, in the style of the website's console list), above Most Popular Games.
+   - **⬇ Downloaded:** a new list (top bar + sidebar) of the games saved on this PC, with their size, **Play**, **Delete**, and **Delete all**. You press Delete twice to confirm. Your saves are kept. (`retrogames.downloads()` / `delete_download()`, API `retro_downloads` / `retro_delete`, and in `dev_server.py` too.)
+   - **Not done:** downloading every game from romsgames.net. Copying a whole website of commercial games is piracy, and it would be many terabytes. Games still download one at a time from RetroGames.cc when you play them. PS2, GameCube, Wii, Xbox, Dreamcast and 3DS can't run in this browser emulator anyway.
+   - Tests: 438 (3 skipped). New tests: English-only filter and deleting downloaded games.
+
+000000. **Human-sounding voice, high/low clone voices, low tunes and button sounds (23 Oct 2026)**
+   - **Speak with** now has 7 choices: the voice picked above, or Female / Male · high / normal / low.
+   - **Emotion you can hear** + **natural speech** (`senses/expressive.py`, see section 3): melody per feeling, questions rising, real pauses at "…", breaths, sighs and gasps, laughs said out loud, and a **Pronunciations** box in Settings → Voice & camera.
+   - Characters → new **Natural speech** checkbox under the Emotion slider.
+   - **3 low tunes** (`ui/psp.js`): Midnight drive (low synth + beat), Cello room (low strings), Deep night piano (low felt piano). New instruments `cello` and `felt`. The low root note never goes below ~50 Hz.
+   - **3 low button sounds:** Deep wood, Soft thud, Deep bell.
+   - **High and low clicks:** two plain button clicks, **Click (high)** and **Click (low)** (`click()` in `psp.js`: a tiny noise tick + tone). Plus Settings → Sounds & effects → **Button pitch** (High / Normal / Low), which works with every button sound (`setSfxPitch`, saved as `sfx_pitch` and in the browser's storage so the Games hub uses it too).
+   - Samples to listen to in `rvc_samples\`: `emo_N_<feeling>.wav` (new) next to `emo_N_<feeling>_plain.wav` (before), and `emo_rick_male_high/male/male_low.wav` (the Rick clone, surprised, ≈257 / 212 / 177 Hz).
+   - Checked on the dev server: the 7 Speak-with choices, the Natural speech box, saving pronunciations, and all 3 low tunes + 3 low button sounds play with no errors.
+   - Tests: 436 OK (3 skipped). New: `tests/test_expressive.py` (8), plus tests for the mood that lasts, a lone *sighs*, and high/low voices.
+   - **Not heard yet on my PC** — please listen and say if a feeling is too strong or too weak (the numbers are in `expressive.STYLES`).
+
+00000. **Real voice clone test with Rick and Gojo + emotion in the voice (23 Oct 2026)**
+   - Downloaded the 2 RVC helper models into `tools\rvc\` (`rmvpe.pt` 173 MB, `vec-768-layer-12.onnx` 360 MB). `setup_rvc.ps1` now downloads with `curl.exe` (resumes, retries 3 times; much faster than Invoke-WebRequest).
+   - **End-to-end test:** real TTS → real RVC, 6 cases: Rick in English (twice) and Tagalog, Gojo in Japanese, Korean and English. All gave clean audio of the right length, with the pitch kept (pitch −12 halves it: 196 → 97 Hz). Listen in the project's **`rvc_samples\`** folder (`N_Voice_lang.wav` = clone, `_before.wav` = the normal voice). You can delete that folder when you're done.
+   - Faster conversion: `rvc.convert()` no longer makes the padding audio it throws away (`MARGIN`), about 1.5× real time instead of 2–2.8×.
+   - **Emotion in the voice** (see section 3): Characters → **Emotion in voice** slider.
+   - faiss is still not installed, so the `.index` "likeness" isn't used yet (optional: `python -m pip install faiss-cpu`).
+   - Tests: 426 OK (3 skipped).
+
+0000. **5 new tunes, button-sound styles, RVC voice clones (23 Oct 2026)**
+   - **Music (`ui/psp.js`):** 5 new background tunes: Rainy café (lo-fi plucks + soft beat), Sunrise (marimba), Deep sea (slow ambient), Retro arcade (chiptune + beat), Starlit garden (music box). With "Dreamy menu" (hub) and "Night room" that's 7, plus **Shuffle** (a new tune about every 32 bars). Settings → General → Sounds & effects → **Room music** (saved as `bgm_theme`).
+   - **Button sounds:** 5 styles (Crystal/PSP, Bubbles, Wood/marimba, Retro game, Wind chime) plus **Mix** (a different one each press). Every click also lands on a different note of a pentatonic scale, so repeated clicks don't sound the same. Settings → **Button sound** (saved as `sfx_style`, and in the browser's storage so the Games hub uses it too).
+   - **RVC voice clones** (see section 3): Characters → Voice clone (RVC) → **Import a voice** → pick the `.pth` (and the `.index`) → choose it → pitch / likeness → **Save character**.
+   - **New files:** `senses/rvc.py`, `senses/rvc_models.py`, `scripts/setup_rvc.bat` + `setup_rvc.ps1`, `tests/test_rvc.py` (10 tests; one loads the real Rick voice from Downloads if it's there).
+   - Tests: 421 OK (3 skipped). Checked on the dev server: the voice clone box (import/select/delete in the mock), all 7 tunes and 5 button styles play with no errors.
+   - The full conversion with real speech was done in the next session (see 00000). **Not heard yet on my PC:** the new tunes and button sounds.
+   - **How to set up voice clones (step by step):**
+     1. In the project folder, open `scripts` and double-click **`setup_rvc.bat`**. It downloads 2 helper models (~530 MB) into `tools\rvc\` and tries to install faiss.
+     2. If faiss didn't install, run this yourself (optional, makes clones sound closer):
+        ```
+        python -m pip install faiss-cpu
+        ```
+     3. Start the app → **Characters** → your character → **Voice clone (RVC)** → **Import a voice (.pth + .index)…** → go to e.g. `Downloads\Rick%20Sanchez` → select `model.pth` **and** the `.index` file (hold Ctrl) → Open. The copy goes to `data\rvc_voices\Rick Sanchez\`.
+     4. Pick it in **Clone voice**. If her normal voice is female and the clone is male, set **Clone pitch** to about −12 (or choose "Speak with: A male voice in her language" and keep pitch 0).
+     5. Press **Hear this voice** (the first time takes a few seconds), then **Save character**.
+
+000. **PSP sound in the room + livelier sidebar (23 Oct 2026, later)**
+   - **New `ui/psp.js`:** one shared sound engine (background tunes "hub" and "room", plus hover/click/open/close/start sounds) with a soft compressor so it's heard on laptop speakers. `ui/games/hubfx.js` now uses it.
+   - **Hub music fix:** it used to wait for your first click and was very quiet and low-pitched. Now it starts as soon as the hub opens (in a normal browser it still waits for the first click).
+   - **Main room (`ui/app.js` "background music in the room"):** plays the "room" tune. It rests while My Music or Spotify plays, during meeting recording and while the window is hidden. It goes quiet while she talks or while you give a voice command. Settings → General → Sounds & effects has "Background music" and "Music volume" (saved as `bgm` / `bgm_volume` in `save_ui`).
+   - **`ui/fx.js`:** tap/open/close now use the PSP sounds, plus a hover tick on menu items and buttons.
+   - **Sidebar (`ui/index.html` `.side-bg`, end of `ui/style.css`):** a faded glow in the theme colour drifts slowly behind the menu, with soft wave lines and a dark layer so the text stays readable. Hovered items slide right with a light bar and a shine, the open item breathes, and the name shimmers. Turned off by "Animations and visual effects" off or reduced motion.
+   - Tests: 411 OK (3 skipped). **Not heard on the real PC yet:** music volume and how it mixes with her voice.
+
+00. **Hub, title scene, collision, camera and speed (23 Oct 2026)**
+   - **Games hub (`ui/games/`):** `hubfx.js` adds an animated waves background, PSP-style background music and UI sounds (hover, click, open) in Vermeil's theme. It's wired into `games.js`, `index.html` and `games.css`, and the music starts after the first click because browsers block autoplay.
+   - **Title screen (`ui/game/main.js` `titleScene`):** it's now a night campfire. A character sits on a log by the fire, with the portal glowing in the background. Positions are set by `TITLE_SEAT`, `TITLE_FIRE` and `TITLE_SHOT`. `ui/games/img/adventure.jpg` was re-rendered to match.
+   - **Weapons (`ui/game/characters.js`, `anim.js`):**
+     - Hand grips are measured in the standing pose, and staffs are held at their middle. Every species was checked.
+     - `anim.js` forces the three.js mixer to re-apply the pose so the hands are in place before a weapon is attached.
+     - The Ranger has a quiver full of arrows on its back.
+   - **Collision:**
+     - `game/layout.py` `_solidity()` decides how solid each scenery piece is by its name. Bushes, plants, grass and flowers can be walked through. Trees are solid at the trunk (0.3 of the radius), and rocks, boulders, logs, pillars and so on at 0.75.
+     - `ui/game/world.js` `collide()` pushes the hero out of solid pieces, so they slide along them. It's used in the player movement in `main.js`.
+     - This only applies to **newly generated places**. Places already in a save keep their old layout.
+   - **Camera:**
+     - `engine3d.js` `updateCamera` raycasts from the hero to the camera about every 0.12 s against `main.js` `solidMeshes()`. If something blocks the view, it swings up or sideways, or pulls in, then eases back out.
+     - In battles, `clearView()` and `fighterPoints()` pick a wide shot and an enemy intro shot from which every fighter and the boss can be seen.
+   - **Speed:**
+     - `ui/room.js` `_frameDue()` stops drawing while the window is hidden and draws at most 30 fps when nothing is moving. It lowers the render resolution by itself when frames get slow, and raises it back when they're fast.
+     - `ui/app.js` `placeBubble` skips its layout work when the speech bubble is hidden.
+   - **Faster text-to-speech:**
+     - `brain/pinakamain.py` `SpeechStream.feed` cuts a long first sentence at a comma, so speaking starts sooner.
+     - The game (`main.js` `speak()`) asks for the next line's audio while the current one is still playing (up to 2 ahead).
+   - **Tests:** 411 ran, all OK (3 skipped).
+   - **Dev server for testing:**
+     ```
+     $env:GAME_SAVE_DIR=(Resolve-Path data\game\test_saves).Path; $env:GAME_NO_AI='1'; python game_tools/dev_server.py 8771
+     ```
+     Then open `http://127.0.0.1:8771/game/index.html?bridge&quickload`. The hub is at `/games/index.html?bridge` and the main app at `/index.html`.
+   - **Not checked on my real PC yet:** how much smoother the room feels, and the hub music volume.
+
+0. **Batch 11 (22 Oct 2026)** - see FEATURES.md "Batch 11" and README:
+   - `senses/ducking.py`: other apps' volume lowered while giving a command / while she speaks (pycaw per-app volume).
+   - Game companion = the app's active character (`app.py _game_companion`, `camp["companion"]`, `game/companion.py name()/system_prompt()`); uid stays "vermeil" internally; client model ids `app:<file>` load from ui/models.
+   - Gym Alternatives tab (`skills/exercise_db.json`, `gym.find_alternatives`).
+   - `scripts/package_app.py` + `scripts/install.ps1` (installer zip), `brain/plugins.py` + `ui/plugins.js` (Settings → Plugins).
+   - Electronics: `skills/electronics.py`, `ui/electronics.js` panel, Circuit Lab page `ui/electronics/` (parts.js, sim.js, view2d.js, view3d.js, lab.js).
+   - Ollama bundled in `tools/ollama` via `scripts/setup_ollama.bat`; `llm.start_ollama/stop_ollama` start it hidden and stop it on exit.
+   - Tests: `tests/test_batch11.py`. Not yet run on the real PC: ducking with real music, setup_ollama, the installer on a second PC.
+
+1. **More dungeons:**
+   - The existing dungeon is richer.
+   - New enclosed biomes: **Forgotten Crypt, Deep Mines, Derelict Space Station** and **Smugglers' Cove**.
+   - New set pieces: torture chamber, sarcophagus hall, mine-cart line.
+2. **The whole library is used:**
+   - The catalog was rebuilt to 3,355 models (it was 1,346).
+   - Biome pools now draw from many packs, and each place picks its own palette of at most about 6 kinds per pool.
+   - 50+ set pieces; the "giant" trees and rocks option; footprints capped so flat models aren't scaled huge.
+   - Places have 1.5 to 4 times more objects.
+3. **New biomes:** Golden Farmlands, Harbor Town, Sakura Valley, Sky Islands (platformer packs), Blocklands (Cube World), Haunted Manor (interior and furniture packs) and Frontier Outpost.
+   - Each has its own music (new themes: sakura, sky, manor), ambience, particles (petals, sparkles) and NPC roles (rabbit folk, blockfolk, monk, butler, ghost hunter).
+4. **Monster sizes:**
+   - Every enemy has a real height in metres, varies ±10%, and about 1 in 12 is an "Alpha" (×1.4–1.75, tougher).
+   - Bosses are house-sized (6–9.5 m), e.g. "Grukk the Ogre Warlord" at 6.5 m.
+   - Battle spacing and the camera scale with the biggest monster.
+   - 24 new enemies and 4 new bosses (mimic, eye drone, xeno horror, war tank, blocky mobs, Brontosaur, Ul'thoth the Elder Horror, the Block Colossus, the Alpaking Sovereign, Overlord Mk-IV).
+   - "Rock Golem" was renamed **Goleling**, after its real model.
+5. **Loading and memory:**
+   - The first loading screen loads characters, monsters and items (387 models).
+   - Each place's loading screen loads that place's scenery; models from older places are unloaded.
+6. **Subtitles:**
+   - Speech goes through one queue, so a new voice never cuts off the narrator.
+   - The text stays up until the whole recording has played.
+   - The voice limit went from 600 to 3,000 characters.
+7. **Sound:**
+   - The audio watchdog resumes or rebuilds the audio if Windows pauses it (this was the "sound cut for 2 minutes in battle" bug).
+   - Silent and invalid sounds are skipped safely.
+   - A natural 20 plays a fanfare with a gold dice tray glow; a natural 1 plays "wah-wah".
+8. **Earlier work:**
+   - Low-poly faceted water.
+   - Kokoro inside the app.
+   - Loading screens, portal walk-in, species animations, music and creature sounds, shops, wandering trader, reforge, inn, voice volume sliders, randomize button.
+   - Fixed 424 invisible converted models.
+
+### 24 Oct 2026: App Inspection & Windows cp1252 Output Fix
+- **Windows console Unicode fix:** Windows default console encoding (`cp1252`) crashed when printing status emojis (`✅`, `⚠️`, `🗑`, `❌`) in `brain/pinakamain.py` and `brain/plugins.py`. Added safe stdout/stderr reconfigure in [folders.py](file:///c:/Users/jpant/OneDrive/Desktop/coding/2025/2025/folders.py) (`errors="replace"`), resolving the `UnicodeEncodeError` in the test suite without altering console environments.
+- **Test verification:** Ran `tests.test_vermeil` (60 passed), `tests.test_batch11` (27 passed), `tests.test_game` (44 passed), and `tests.test_spotify` (13 passed).
+- Created [`env.example`](file:///c:/Users/jpant/OneDrive/Desktop/coding/2025/2025/env.example) documenting configuration keys with safe placeholder values.
+
+## 5. Status / things to check next
+
+- **29 Oct 2026 Drive folder round:** the folder link is built in; reading your real shared folder works; `dist\Vermeil-Drive` was copied into `G:\My Drive\Vermeil` with Google Drive for desktop (robocopy, 32 files, 3.2 GB) on 29 Oct 2026 and `plugins.folder_files(refresh=True)` sees the uploaded zips (re-run `package_app.py --drive` and copy again to update them); the Settings box was checked in `?mock`; the new Drive tests pass. **Real round trip checked (29 Oct 2026):** Camera uninstalled (3 models deleted), then Install downloaded `camera.zip` (43 MB) from the Drive folder, unpacked it, the 3 models came back byte-identical and OpenCV loads them (pip was stubbed in that test so `opencv-python` stayed installed). **Not checked yet:** the same for the other zips (Drive's list page layout is parsed from its HTML, so if Google changes it, `parse_folder_page` needs updating); `--with-wheels` on a real run.
+- **29 Oct 2026 side-view round:** the autotest (`Build\Vermeil.exe -autotest`) plays the side-view fights with 0 exceptions (bubble, Perfect counter, a flier and the flying Thornwyrm in phase 2 are in the screenshots in `Build\shots`). Chatterbox first sound measured at 2.47 s on the GPU. **Not checked yet:** playing the side view yourself with the keyboard; ledge hopping on every biome; uploading the `--drive` folders to Google Drive and installing from them on another PC.
+- **Forest + cards round:** the self-test (`Build\Vermeil.exe -autotest`) played the first forest stage (5 rounds, mini-boss), then the Thornwyrm through all 3 phases to the win, with 11 level-up card picks and no errors in `Tools\play.log`. The autotest plays only stage 1 and the boss, with weaker enemies, and its hero can't die. **Not checked yet:** playing it yourself with keyboard/mouse/pad; stages 2-5; heroes other than the Frog (their skills and counters only compiled, the autotest always picks the Frog); balance. The red warnings are faint on the Heartwood's brown ground.
+- **28 Oct 2026 Unity round:** the self-test (`Build\Vermeil.exe -autotest`) runs the whole flow with no errors: campfire (everyone sitting, Vermeil on her own log), black hole, eject into the village, first Greenwood area, a 3-enemy battle and the victory popups. Sizes and textures checked in the screenshots; all 481 Python tests pass. **Not done / not checked yet:** playing it yourself with keyboard (only the autotest drove it); the torn tent pieces still look spiky; the voice clone in the game needs the app's voice server running (`game_tools/unity_voice_server.py`, not tested end-to-end from inside the exe); later biomes, the boss, the ending and the Eclipse unlock were not reached by the autotest.
+- **28 Oct 2026 round:** UniMate ran for real on pikachu without Blender; Kokoro, RVC and every emotion made good audio; rooms, dropdowns and the Cooking & Baking tabs were checked in `?mock`; all 473 tests pass. **Not tested yet:** UniMate on a model you rigged yourself with Auto rig, Kokoro on the GPU (needs the onnxruntime-gpu swap).
+- **27 Oct 2026 undo round:** rooms on both sides, the camera following her into each room and back, the window item (delete, reload, re-add, glow) and the RVC box were checked in the test page (`?mock`); all 466 tests pass. **Not tested on my real PC yet:** importing an RVC model again in the real app, a UniMate animation now that its libraries are installed.
+- **27 Oct 2026 house round:** rooms, the window toggle and the wall mirrors were checked in the test page (`?mock`); all 462 tests pass. **Not tested on my real PC yet:** the leftover-song stop after a restart, Games pausing Spotify, UniMate after the two pip commands.
+- **27 Oct 2026 clean-up round:** yard walking, wallpapers, meal planner and progress charts checked in the test page (`?mock`); all 456 tests pass. **Not tested on my real PC yet:** the auto-setup (Qwen + UniMate downloads, see `data/auto_setup.log`), the Qwen fallback to the normal voice, songs playing to the end.
+- **27 Oct 2026 round (rigging, Qwen3-TTS, gym calories, AI detector, lyric videos, devices):** checked in the test page (`?mock`) and by the tests; a code-only copy on a "fresh PC" passed everything. **Not tested on my real PC yet:** Qwen3-TTS cloning (run `python -m pip install -r requirements-ai.txt`, then `scripts\setup_qwen_tts.bat`), UniMate (needs Miniconda + Git, then `scripts\setup_unimate.bat`), the camera/mic pickers with real devices, and songs resuming after a dropped stream.
+- **New PC install:** `python -m pip install -r requirements.txt`, then (for cloned voices / RVC and the Chatterbox emotional voice) `python -m pip install -r requirements-ai.txt`. Every package in a plugin's `pip` list (brain/plugins.py) is in one of these two files (checked 29 Oct 2026; `chatterbox-tts==0.1.7` was the one missing, now in requirements-ai.txt because it pins torch 2.6.0). Copy `env` and `data/` across yourself. The Music plugin pack brings ffmpeg/ffplay.
+- All of this session's changes have been copied straight into the project folder on my PC (no manual install needed).
+- **Not yet tested on my real PC:** Kokoro (run `scripts\setup_kokoro.bat` first), RVC voice clones inside the app (the helper models are already in `tools\rvc\`; only the samples in `rvc_samples\` were made), emotion in the voice, the new tunes and button sounds, the new biomes, and memory use over a long session.
+- **RVC on CPU is slower than plain TTS** (each sentence waits for its conversion). About 1.5 s of work per 1 s of speech after warm-up, with a slow first sentence. If it's too slow: pause OneDrive sync, use a shorter reply style, or later try onnxruntime-directml / a GPU build of torch.
+- **Ideas not done yet:**
+  - Assemble buildings from the modular megakit pieces (walls and floors are currently only used for dungeon rings and floors).
+  - Use the headless "Modular Character Outfits" on a base body.
+  - Fish swimming in water.
+- **OneDrive slows big file writes.** Pausing sync, or moving the project out of OneDrive, makes it faster.
+
+## 6. Notes for the next Claude
+
+- Read `game/README.md` (game overview and latest changes) and the main `README.md` (app setup, the Kokoro section).
+- Run the tests before and after changes. `tests/test_game.py` checks that every biome builds a valid, full place, that every pool and set piece finds models, monster sizes, the preload list, and invisible models.
+- Change the game by editing the JSON in `game/data/` first; the layout builder and client read everything from there.
+- **Never** output the contents of `env`.
+
+## 7. Current app size (28 Oct 2026)
+
+**Cards round:** `blender/cards/` (20 MB) is new, so the project folder is still **about 11.9 GB**. The Unity project gained 13 MB of card pictures.
+
+**Unity game (outside this folder):** `C:\Users\jpant\My project` is the Unity project; its finished build (`Build\`) is about 312 MB. The hero models (`blender/heroes/`, 13 MB) are small, so the totals below don't change. The app folder only gained the small voice server (`game_tools/unity_voice_server.py`) and one test file, so the numbers below are unchanged.
+
+Total project folder: **about 11.9 GB** (measured per top-level folder), the same as after the undo round: this round's code is tiny and UniMate's test outputs (`ui/models/_unimate/`) are only 5 MB.
+
+| Folder | Size | What it is |
+|---|---|---|
+| `ui/general_asset_pack/` | 1.13 GB | the asset library all games, the main room and the hubs use |
+| `tools/` | 2.3 GB | UniMate 1.2 GB, RVC helpers 0.5 GB, Kokoro 0.4 GB, downloads 0.15 GB |
+| `data/` | 1.07 GB | your saved data, songs, voices (Qwen voices removed) |
+| `ui/` | 0.98 GB | the app pages, 3D models, game assets |
+| `Packages/` | 0.57 GB | ffmpeg and other bundled programs |
+| `blender/` | 0.16 GB | Blender files (incl. `heroes/` 13 MB, `cards/` 20 MB) |
+| code (`brain`, `senses`, `skills`, `game`, `tests`, `app.py`) | ~7 MB | the actual program |
+
+Outside the project folder: Miniconda + the `unimate` environment, now with its libraries installed (PyTorch 2.5.1 CUDA 12.4 and the rest): **6.4 GB**, and **7.5 GB** for all of Miniconda together. The Qwen3-TTS models (6.7 GB) were deleted from the Hugging Face cache; what is left there (other AI models) is 10.7 GB.
